@@ -1,6 +1,6 @@
 # ZenTimings
 
-![ZenTimings](screenshot.png "ZenTimings")
+![ZenTimings](preview.png "ZenTimings")
 
 ### Projects used  
 [Adonis UI (github)](https://benruehl.github.io/adonis-ui/)  

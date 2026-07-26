@@ -32,7 +32,7 @@
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Vertical" Margin="15,15,5,15" Grid.ColumnSpan="6" Grid.Row="0" Width="424">
-                <TextBlock Text="v1.39 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
+                <TextBlock Text="v1.40 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
                 <TextBlock Text="Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on purpose: an upstream release would overwrite these changes."
                            TextWrapping="WrapWithOverflow" Height="auto" Margin="0,4,0,0" Opacity="0.75" />
 
@@ -45,7 +45,8 @@
 
                 <TextBlock Text="" />
                 <TextBlock Text="Timings" FontWeight="Bold" Height="auto" />
-                <TextBlock Text=" - tCCD_L, tCCD_L_WR and tCCD_L_WR2, decoded from UMC registers ZenStates-Core does not read" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - tCCD_L and tCCD_L_WR2, decoded from UMC registers ZenStates-Core does not read" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - tCCD_L_WR, recovered from the APOB: it appears in no UMC register, in the AOD table or in the SPD" TextWrapping="WrapWithOverflow" Height="auto" />
                 <TextBlock Text=" - CA / CK / CS on-die termination per bank group (ODT A and ODT B)" TextWrapping="WrapWithOverflow" Height="auto" />
                 <TextBlock Text=" - Timings panel rebalanced so all three columns end on the same row" TextWrapping="WrapWithOverflow" Height="auto" />
 
