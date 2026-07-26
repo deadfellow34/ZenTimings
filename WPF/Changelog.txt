@@ -1,4 +1,4 @@
-# v1.39 - updated by deadfellow
+# v1.40 - updated by deadfellow
 
  Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on
  purpose: pulling an upstream release would overwrite everything below.
@@ -13,8 +13,13 @@
  - CSV telemetry logging
 
  Timings
- - tCCD_L, tCCD_L_WR and tCCD_L_WR2, decoded from UMC registers that
-   ZenStates-Core does not read
+ - tCCD_L and tCCD_L_WR2, decoded from UMC registers that ZenStates-Core does
+   not read: tCCD_L from 0x50198[7:3] + 5, tCCD_L_WR2 from 0x502E0[5:0] + 7
+ - tCCD_L_WR, recovered from the APOB. It appears in no UMC register, and dumps
+   differing only in it are byte-identical across both channel windows, the AOD
+   table and the SPD. AGESA stores the three same-bank-group write timings as
+   consecutive nCK values, one copy per channel, so it is located by anchoring
+   on tCCD_L and tCCD_L_WR2 rather than on a fixed offset
  - CA / CK / CS on-die termination per bank group (ODT A and ODT B)
  - Timings panel rebalanced so all three columns end on the same row
 
