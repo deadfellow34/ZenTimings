@@ -8,6 +8,7 @@
     xmlns:adonisControls="clr-namespace:AdonisUI.Controls;assembly=AdonisUI"
     xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
     xmlns:adonisUi="clr-namespace:AdonisUI;assembly=AdonisUI"
+    xmlns:loc="clr-namespace:ZenTimings.Localization"
     adonisExtensions:CursorSpotlightExtension.RelativeSpotlightSize="0"
     mc:Ignorable="d"
     x:Name="OptionsWindow"
@@ -88,6 +89,11 @@
                     <RowDefinition Height="auto" />
                     <RowDefinition Height="auto" />
                     <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
                 </Grid.RowDefinitions>
 
                 <ToggleButton
@@ -123,11 +129,15 @@
                     VerticalAlignment="Center"
                     Padding="5 0" FontWeight="Normal" />
 
+                <!-- Hidden rather than deleted: the code-behind still reads and writes it, and an
+                     auto-collapsing row leaves no gap. This fork never checks for updates, so
+                     offering the switch would just be a lie. -->
                 <ToggleButton
                     x:Name="checkBoxCheckUpdate"
                     Grid.Column="0"
                     Grid.Row="2"
                     Grid.ColumnSpan="3"
+                    Visibility="Collapsed"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
                         Content="Check for updates" />
@@ -197,6 +207,78 @@
                     <ComboBoxItem Content="Legacy" />
                     <ComboBoxItem Content="Extended (experimental)" />
                 </ComboBox>
+
+                <TextBlock
+                    Grid.Column="0"
+                    Grid.Row="7"
+                    Margin="0 5 5 5"
+                    Text="{loc:Loc Opt.Language}" VerticalAlignment="Center" />
+
+                <ComboBox
+                    x:Name="comboBoxLanguage"
+                    Grid.ColumnSpan="2"
+                    Grid.Column="1"
+                    Grid.Row="7"
+                    HorizontalAlignment="Left"
+                    Margin="5,0,0,0"
+                    VerticalAlignment="Top"
+                    Width="151"
+                >
+                    <ComboBoxItem Content="English" />
+                    <ComboBoxItem Content="Türkçe" />
+                </ComboBox>
+
+                <ToggleButton
+                    x:Name="checkBoxScreenshotHotkey"
+                    Grid.Column="0"
+                    Grid.Row="8"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.ScreenshotHotkey}" />
+
+                <ToggleButton
+                    x:Name="checkBoxTrayLiveIcon"
+                    Grid.Column="0"
+                    Grid.Row="9"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.TrayLiveIcon}" />
+
+                <TextBlock
+                    Grid.Column="0"
+                    Grid.Row="10"
+                    Margin="0 5 5 5"
+                    Text="{loc:Loc Opt.TrayIconColor}" VerticalAlignment="Center" />
+
+                <ComboBox
+                    x:Name="comboBoxTrayColor"
+                    Grid.ColumnSpan="2"
+                    Grid.Column="1"
+                    Grid.Row="10"
+                    HorizontalAlignment="Left"
+                    Margin="5,0,0,0"
+                    VerticalAlignment="Top"
+                    Width="151"
+                >
+                    <ComboBoxItem Content="White" />
+                    <ComboBoxItem Content="Green" />
+                    <ComboBoxItem Content="Cyan" />
+                    <ComboBoxItem Content="Yellow" />
+                    <ComboBoxItem Content="Orange" />
+                    <ComboBoxItem Content="Red" />
+                    <ComboBoxItem Content="Black" />
+                </ComboBox>
+
+                <ToggleButton
+                    x:Name="checkBoxStartWithWindows"
+                    Grid.Column="0"
+                    Grid.Row="11"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.StartWithWindows}" />
             </Grid>
         </StackPanel>
 

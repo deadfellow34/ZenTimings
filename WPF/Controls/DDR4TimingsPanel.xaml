@@ -220,6 +220,7 @@
                            IsEnabled="{Binding PowerTable.FCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
                     <TextBlock Text="UCLK" TextAlignment="Right"
                            IsEnabled="{Binding PowerTable.UCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
+                    <TextBlock Text="BCLK" TextAlignment="Right" />
 
                     <TextBlock Text="" Style="{DynamicResource DividerTextBlock}" />
 
@@ -233,6 +234,10 @@
                            IsEnabled="{Binding PowerTable.CLDO_VDDG_CCD, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
                     <TextBlock Text="VDDG IOD" TextAlignment="Right"
                            IsEnabled="{Binding PowerTable.CLDO_VDDG_IOD, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
+                    <TextBlock Text="VDDCR SOC" TextAlignment="Right"
+                           IsEnabled="{Binding PowerTable.VDDCR_SOC, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
+                    <TextBlock Text="VDD MISC" TextAlignment="Right"
+                           IsEnabled="{Binding PowerTable.VDD_MISC, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
 
                     <!-- MEM Voltages -->
                     <TextBlock x:Name="labelMemVddio" Text="VDIMM" TextAlignment="Right" IsEnabled="{Binding WMIPresent}" />
@@ -278,6 +283,8 @@
                     <TextBlock
                     Text="{Binding PowerTable.UCLK, FallbackValue='N/A', StringFormat='{}{0:F2}', Mode=OneWay, Converter={StaticResource FloatToNA}}"
                     Style="{DynamicResource ValueStyles}" />
+                    <TextBlock Text="{Binding BclkString, Mode=OneWay, FallbackValue='N/A'}"
+                           Style="{DynamicResource ValueStyles}" />
 
                     <TextBlock Text="" Style="{DynamicResource DividerTextBlock}" />
 
@@ -291,6 +298,12 @@
                         Style="{DynamicResource ValueStyles}" />
                     <TextBlock
                         Text="{Binding PowerTable.CLDO_VDDG_IOD, FallbackValue='N/A', Mode=OneWay, Converter={StaticResource FloatToVoltage}}"
+                        Style="{DynamicResource ValueStyles}" />
+                    <TextBlock
+                        Text="{Binding PowerTable.VDDCR_SOC, FallbackValue='N/A', Mode=OneWay, Converter={StaticResource FloatToVoltage}}"
+                        Style="{DynamicResource ValueStyles}" />
+                    <TextBlock
+                        Text="{Binding PowerTable.VDD_MISC, FallbackValue='N/A', Mode=OneWay, Converter={StaticResource FloatToVoltage}}"
                         Style="{DynamicResource ValueStyles}" />
                     <TextBlock x:Name="textBoxMemVddio" Text="N/A" Style="{DynamicResource ValueStyles}" />
 

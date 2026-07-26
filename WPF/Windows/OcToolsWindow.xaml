@@ -1,0 +1,249 @@
+<local:ThemedAdonisWindow
+    xmlns:local="clr-namespace:ZenTimings"
+    x:Class="ZenTimings.Windows.OcToolsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
+    xmlns:adonisUi="clr-namespace:AdonisUI;assembly=AdonisUI"
+    xmlns:loc="clr-namespace:ZenTimings.Localization"
+    mc:Ignorable="d"
+    Title="{loc:Loc Oc.Title}"
+    Height="620"
+    Width="860"
+    MinWidth="640"
+    MinHeight="420"
+    WindowStartupLocation="CenterOwner"
+    BorderThickness="1"
+    UseLayoutRounding="True"
+    Closing="OcToolsWindow_Closing"
+    Style="{DynamicResource WindowStyles}">
+
+    <Window.Resources>
+        <Style x:Key="LabelStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static adonisUi:Brushes.ForegroundBrush}}"/>
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="2,0"/>
+        </Style>
+        <Style x:Key="GridCellLabel" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+            <Setter Property="Opacity" Value="0.75"/>
+            <Setter Property="Padding" Value="4,0"/>
+        </Style>
+        <Style x:Key="GridCellValue" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextColor}"/>
+            <Setter Property="Padding" Value="4,0"/>
+        </Style>
+        <Style x:Key="ToolButton" TargetType="{x:Type Button}">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="0,0,6,4"/>
+            <Setter Property="MinWidth" Value="86"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl x:Name="Tabs" Grid.Row="0" Margin="10" BorderThickness="0">
+
+            <!-- ===================== Register Diff ===================== -->
+            <TabItem Header="{loc:Loc Oc.TabRegisters}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Padding="0,6,0,4">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button x:Name="ButtonCaptureA" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.CaptureA}" Click="ButtonCaptureA_Click"/>
+                                <Button x:Name="ButtonCaptureB" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.CaptureB}" Click="ButtonCaptureB_Click"/>
+                                <Button x:Name="ButtonLoadA" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.LoadA}" Click="ButtonLoadA_Click"/>
+                                <Button x:Name="ButtonLoadB" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.LoadB}" Click="ButtonLoadB_Click"/>
+                                <Button x:Name="ButtonSaveA" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.SaveA}" Click="ButtonSaveA_Click"/>
+                                <Button x:Name="ButtonSaveB" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.SaveB}" Click="ButtonSaveB_Click"/>
+                                <Button x:Name="ButtonCompareRegisters" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.Compare}"
+                                        Click="ButtonCompareRegisters_Click"/>
+                                <CheckBox x:Name="CheckShowUnchanged"
+                                          Content="{loc:Loc Oc.ShowAll}"
+                                          VerticalAlignment="Center"
+                                          Margin="8,0,0,4"
+                                          Click="CheckShowUnchanged_Click"/>
+                            </WrapPanel>
+
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="A:" Style="{StaticResource LabelStyle}" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TextSnapshotA" Text="-" Style="{StaticResource LabelStyle}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="B:" Style="{StaticResource LabelStyle}" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TextSnapshotB" Text="-" Style="{StaticResource LabelStyle}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="RegisterGrid"
+                              Margin="0,8,0,0"
+                              AutoGenerateColumns="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserResizeRows="False"
+                              CanUserReorderColumns="False"
+                              CanUserSortColumns="True"
+                              IsReadOnly="True"
+                              FontSize="11">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Register" Width="130" Binding="{Binding AddressText}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                            <DataGridTextColumn Header="A" Width="130" Binding="{Binding ValueAText}"
+                                                ElementStyle="{StaticResource GridCellValue}"/>
+                            <DataGridTextColumn Header="B" Width="130" Binding="{Binding ValueBText}"
+                                                ElementStyle="{StaticResource GridCellValue}"/>
+                            <DataGridTextColumn Header="Bits" Width="90" Binding="{Binding ChangedBitsText}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                            <DataGridTextColumn Header="Delta" Width="*" Binding="{Binding DeltaText}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ===================== Profiles ===================== -->
+            <TabItem Header="{loc:Loc Oc.TabProfiles}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Padding="0,6,0,4">
+                        <WrapPanel>
+                            <Button x:Name="ButtonSaveProfile" Style="{StaticResource ToolButton}"
+                                    Content="{loc:Loc Oc.SaveProfile}" Click="ButtonSaveProfile_Click"/>
+                            <Button x:Name="ButtonCompareToLive" Style="{StaticResource ToolButton}"
+                                    Content="{loc:Loc Oc.CompareToLive}" Click="ButtonCompareToLive_Click"/>
+                            <Button x:Name="ButtonCompareTwo" Style="{StaticResource ToolButton}"
+                                    Content="{loc:Loc Oc.CompareTwo}" Click="ButtonCompareTwo_Click"/>
+                            <Button x:Name="ButtonDeleteProfile" Style="{StaticResource ToolButton}"
+                                    Content="{loc:Loc Oc.DeleteProfile}" Click="ButtonDeleteProfile_Click"/>
+                            <Button x:Name="ButtonRefreshProfiles" Style="{StaticResource ToolButton}"
+                                    Content="{loc:Loc Oc.Refresh}" Click="ButtonRefreshProfiles_Click"/>
+                        </WrapPanel>
+                    </Border>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="260"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <ListBox x:Name="ProfileList"
+                                 Grid.Column="0"
+                                 Margin="0,8,0,0"
+                                 SelectionMode="Extended"
+                                 DisplayMemberPath="Display"
+                                 FontSize="11"/>
+
+                        <DataGrid x:Name="ProfileGrid"
+                                  Grid.Column="2"
+                                  Margin="0,8,0,0"
+                                  AutoGenerateColumns="False"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="None"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  CanUserResizeRows="False"
+                                  CanUserReorderColumns="False"
+                                  CanUserSortColumns="True"
+                                  IsReadOnly="True"
+                                  FontSize="11">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Key" Width="200" Binding="{Binding Key}"
+                                                    ElementStyle="{StaticResource GridCellLabel}"/>
+                                <DataGridTextColumn Header="A" Width="*" Binding="{Binding ValueA}"
+                                                    ElementStyle="{StaticResource GridCellValue}"/>
+                                <DataGridTextColumn Header="B" Width="*" Binding="{Binding ValueB}"
+                                                    ElementStyle="{StaticResource GridCellValue}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ===================== SPD vs Live ===================== -->
+            <TabItem Header="{loc:Loc Oc.TabSpd}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Padding="0,6,0,4">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button x:Name="ButtonRefreshSpd" Style="{StaticResource ToolButton}"
+                                        Content="{loc:Loc Oc.Refresh}" Click="ButtonRefreshSpd_Click"/>
+                            </WrapPanel>
+                            <TextBlock x:Name="TextSpdHeader" Style="{StaticResource LabelStyle}"
+                                       TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="SpdGrid"
+                              Margin="0,8,0,0"
+                              AutoGenerateColumns="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserResizeRows="False"
+                              CanUserReorderColumns="False"
+                              CanUserSortColumns="True"
+                              IsReadOnly="True"
+                              FontSize="11">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Timing" Width="130" Binding="{Binding Name}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                            <DataGridTextColumn Header="JEDEC (ns)" Width="110" Binding="{Binding RatedNsText}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                            <DataGridTextColumn Header="JEDEC min (clk)" Width="120" Binding="{Binding RatedNckText}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                            <DataGridTextColumn Header="Live (clk)" Width="100" Binding="{Binding LiveNckText}"
+                                                ElementStyle="{StaticResource GridCellValue}"/>
+                            <DataGridTextColumn Header="Live (ns)" Width="100" Binding="{Binding LiveNsText}"
+                                                ElementStyle="{StaticResource GridCellValue}"/>
+                            <DataGridTextColumn Header="Margin" Width="*" Binding="{Binding MarginText}"
+                                                ElementStyle="{StaticResource GridCellLabel}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="1" Style="{DynamicResource Separator}"/>
+
+        <Border Grid.Row="2" Style="{DynamicResource BottomPanelStyles}">
+            <TextBlock x:Name="StatusText"
+                       Text="{loc:Loc Oc.Ready}"
+                       Style="{StaticResource LabelStyle}"
+                       Opacity="0.75"
+                       VerticalAlignment="Center"/>
+        </Border>
+    </Grid>
+</local:ThemedAdonisWindow>

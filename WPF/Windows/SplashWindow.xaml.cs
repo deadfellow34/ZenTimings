@@ -32,7 +32,10 @@ namespace ZenTimings.Windows
         {
             splash.Show();
             ApplySettings();
-            if (appSettings.CheckForUpdates) updater.CheckForUpdate();
+
+            // Deliberately no update check. This build is a hand-patched fork of irusanov's
+            // ZenTimings, so pulling an upstream release would overwrite every change in it.
+            // Updater.cs is left in the tree for reference but is never invoked.
         }
 
         public static void Stop() => splash.Close();

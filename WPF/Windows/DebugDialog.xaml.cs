@@ -175,7 +175,11 @@ namespace ZenTimings.Windows
                         {
                             AddLine("-- UMC Registers");
                             var startReg = offset | 0x50000;
-                            var endReg = offset | 0x50300;
+                            // ZenStates-Core only decodes up to 0x50300, but timings live above it:
+                            // tCCD_L is at 0x50198 and tCCD_L_WR2 at 0x502E0, and the block that was
+                            // never dumped (0x50300-0x50FFC) is exactly where the remaining undecoded
+                            // parameters have to be. Reports are the only way to find them.
+                            var endReg = offset | 0x50FFC;
                             while (startReg <= endReg)
                             {
                                 var data = cpu.ReadDword(startReg);

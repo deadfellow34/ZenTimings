@@ -353,3 +353,37 @@ Dotfuscated/
 *.pfx
 # Downloaded PawnIO setup binary
 WPF/Resources/PawnIO/PawnIO_setup.exe
+
+# Upstream reference clones (read-only, not part of the build)
+_ref/
+
+# --- Local research material, not part of the published fork ---
+
+# Vendor BIOS images and copyrighted specifications
+*.F1?[a-z]
+*.F[0-9][0-9]
+DDR5 Spec JESD79-5.pdf
+
+# Register dumps captured from local hardware
+register/
+
+# Design mockups and reference screenshots
+111.png
+legacy.png
+logo.png
+other.png
+tasarim.png
+tray zen.png
+Untitled.jpg
+WhatsApp Image *.jpeg
+
+# Turkish working notes
+PROJE-INCELEME.md
+ZENTIMINGS-ISLEYIS-VE-REGISTER-HARITASI.md
+
+# Stale DLL backups
+*.dll.*.bak
+
+# AMD Ryzen Master Monitoring SDK - proprietary, has its own EULA and is not
+# referenced by the ZenTimings build. Kept locally for reference only.
+RyzenMasterMonitoringSDK/

@@ -13,6 +13,7 @@
         <converters:FloatToVoltageConverter x:Key="FloatToVoltage" />
         <converters:FloatToBoolConverter x:Key="FloatToBool" />
         <converters:FloatToNAConverter x:Key="FloatToNA" />
+        <converters:ClockRatioConverter x:Key="ClockRatio" />
     </UserControl.Resources>
 
     <Border Style="{DynamicResource TimingsStyles}">
@@ -52,6 +53,7 @@
                     <TextBlock Text="tPHYWRD" TextAlignment="Right" />
                     <TextBlock Text="tPHYWRL" TextAlignment="Right" />
                     <TextBlock Text="tRDPRE" TextAlignment="Right" />
+                    <TextBlock Text="tWRPRE" TextAlignment="Right" />
                     <!--TextBlock Text="tXP"
                            TextAlignment="Right"
                           /-->
@@ -112,6 +114,8 @@
                            Style="{DynamicResource ValueStyles}" />
                     <TextBlock Text="{Binding Timings.RDPRE, FallbackValue='N/A'}"
                            Style="{DynamicResource ValueStyles}" />
+                    <TextBlock Text="{Binding Timings.WRPRE, FallbackValue='N/A'}"
+                           Style="{DynamicResource ValueStyles}" />
 
                     <!--TextBlock Text="{Binding Timings.XP, FallbackValue='N/A'}"
                            Style="{DynamicResource ValueStyles}"
@@ -135,6 +139,15 @@
 
                     <TextBlock Text="tRDRDSCL" TextAlignment="Right" />
                     <TextBlock Text="tWRWRSCL" TextAlignment="Right" />
+
+                    <!-- tCCD_L family -->
+                    <StackPanel Orientation="Vertical"
+                                Visibility="{Binding IsTccdlVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="tCCD_L" TextAlignment="Right" />
+                        <TextBlock Text="tCCD_L_WR" TextAlignment="Right" />
+                        <TextBlock Text="tCCD_L_WR2" TextAlignment="Right" />
+                    </StackPanel>
+
                     <TextBlock Text="tCWL" TextAlignment="Right" />
                     <TextBlock Text="tRTP" TextAlignment="Right" />
                     <TextBlock Text="tRDWR" TextAlignment="Right" />
@@ -152,9 +165,6 @@
                     <TextBlock Text="tMRD" TextAlignment="Right" />
                     <TextBlock Text="tMRDPDA" TextAlignment="Right" />
                     <TextBlock Text="tPHYRDL" TextAlignment="Right" />
-                    <TextBlock Text="PowerDown" TextAlignment="Right" />
-                    <TextBlock Text="tWRPRE" TextAlignment="Right" />
-
                 </StackPanel>
 
                 <StackPanel Grid.Column="1">
@@ -171,6 +181,17 @@
                            Style="{DynamicResource ValueStyles}" />
                     <TextBlock Text="{Binding Timings.WRWRSCL, FallbackValue='N/A'}"
                            Style="{DynamicResource ValueStyles}" />
+
+                    <StackPanel Orientation="Vertical"
+                                Visibility="{Binding IsTccdlVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding TccdlText, FallbackValue='N/A'}"
+                               Style="{DynamicResource ValueStyles}" />
+                        <TextBlock Text="{Binding TccdlWrText, FallbackValue='N/A'}"
+                               Style="{DynamicResource ValueStyles}" />
+                        <TextBlock Text="{Binding TccdlWr2Text, FallbackValue='N/A'}"
+                               Style="{DynamicResource ValueStyles}" />
+                    </StackPanel>
+
                     <TextBlock Text="{Binding Timings.CWL, FallbackValue='N/A'}"
                            Style="{DynamicResource ValueStyles}" />
                     <TextBlock Text="{Binding Timings.RTP, FallbackValue='N/A'}"
@@ -212,10 +233,6 @@
                            Style="{DynamicResource ValueStyles}" />
                     <TextBlock Text="{Binding Timings.PHYRDL, FallbackValue='N/A'}"
                            Style="{DynamicResource ValueStyles}" />
-                    <TextBlock Text="{Binding Timings.PowerDown, FallbackValue='N/A'}"
-                           Style="{DynamicResource ValueStyles}" />
-                    <TextBlock Text="{Binding Timings.WRPRE, FallbackValue='N/A'}"
-                           Style="{DynamicResource ValueStyles}" />
                 </StackPanel>
             </Grid>
 
@@ -228,12 +245,36 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="MCLK" TextAlignment="Right"
-                           IsEnabled="{Binding PowerTable.MCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
-                    <TextBlock Text="FCLK" TextAlignment="Right"
-                           IsEnabled="{Binding PowerTable.FCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
-                    <TextBlock Text="UCLK" TextAlignment="Right"
-                           IsEnabled="{Binding PowerTable.UCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" />
+                    <TextBlock TextAlignment="Right"
+                           IsEnabled="{Binding PowerTable.MCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}">
+                        <TextBlock.Text>
+                            <MultiBinding Converter="{StaticResource ClockRatio}" ConverterParameter="MCLK">
+                                <Binding Path="PowerTable.MCLK" Mode="OneWay" />
+                                <Binding Path="PowerTable.FCLK" Mode="OneWay" />
+                                <Binding Path="PowerTable.UCLK" Mode="OneWay" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock TextAlignment="Right"
+                           IsEnabled="{Binding PowerTable.FCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}">
+                        <TextBlock.Text>
+                            <MultiBinding Converter="{StaticResource ClockRatio}" ConverterParameter="FCLK">
+                                <Binding Path="PowerTable.MCLK" Mode="OneWay" />
+                                <Binding Path="PowerTable.FCLK" Mode="OneWay" />
+                                <Binding Path="PowerTable.UCLK" Mode="OneWay" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock TextAlignment="Right"
+                           IsEnabled="{Binding PowerTable.UCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}">
+                        <TextBlock.Text>
+                            <MultiBinding Converter="{StaticResource ClockRatio}" ConverterParameter="UCLK">
+                                <Binding Path="PowerTable.MCLK" Mode="OneWay" />
+                                <Binding Path="PowerTable.FCLK" Mode="OneWay" />
+                                <Binding Path="PowerTable.UCLK" Mode="OneWay" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
 
                     <TextBlock Text="" Style="{DynamicResource DividerTextBlock}" />
 
@@ -274,6 +315,7 @@
                     <TextBlock x:Name="labelRttWrD5" Text="RttWr" TextAlignment="Right" IsEnabled="False" />
                     <TextBlock x:Name="labelRttParkD5" Text="RttPark" TextAlignment="Right" IsEnabled="False" />
                     <TextBlock x:Name="labelRttParkDqs" Text="RttParkDqs" TextAlignment="Right" IsEnabled="False" />
+                    <TextBlock Text="PowerDown" TextAlignment="Right" />
                     <TextBlock Text="Nitro" ToolTip="RxData/TxData/ControlLine" TextAlignment="Right" />
                 </StackPanel>
 
@@ -331,6 +373,8 @@
                     <TextBlock x:Name="textBoxRttWrD5" Text="N/A" Style="{DynamicResource ValueStyles}" />
                     <TextBlock x:Name="textBoxRttParkD5" Text="N/A" Style="{DynamicResource ValueStyles}" />
                     <TextBlock x:Name="textBoxRttParkDqs" Text="N/A" Style="{DynamicResource ValueStyles}" />
+                    <TextBlock Text="{Binding Timings.PowerDown, FallbackValue='N/A'}"
+                        Style="{DynamicResource ValueStyles}" />
                     <TextBlock Text="{Binding Timings.Nitro, FallbackValue='N/A'}"
                         Style="{DynamicResource ValueStyles}" />
                 </StackPanel>

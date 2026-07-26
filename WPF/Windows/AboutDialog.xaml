@@ -99,6 +99,10 @@
                                 <TextBlock x:Name="labelVersion" Text="" Padding="0 2 5 2" />
                                 <TextBlock x:Name="labelCopyright" Text="" Padding="0 2 5 2" />
                                 <TextBlock x:Name="labelCompanyName" Text="" Padding="0 2 5 2" />
+                                <TextBlock Text="Updated by deadfellow"
+                                           Padding="0 6 5 2"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentTextColor}" />
                                 <TextBlock Padding="0 2 5 2">
                                     <Hyperlink NavigateUri="https://zentimings.com"
                                                RequestNavigate="Hyperlink_RequestNavigate">

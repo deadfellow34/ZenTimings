@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ZenStates.Core;
+using ZenTimings.Localization;
 using static ZenTimings.AppSettings;
 
 namespace ZenTimings.Windows
@@ -46,10 +47,40 @@ namespace ZenTimings.Windows
             numericUpDownRefreshInterval.IsEnabled = appSettings.AutoRefresh && appSettings.AdvancedMode;
             numericUpDownRefreshInterval.Text = appSettings.AutoRefreshInterval.ToString();
             msText.IsEnabled = numericUpDownRefreshInterval.IsEnabled;
-            comboBoxTheme.SelectedIndex = (int)_Theme;
+            comboBoxTheme.SelectedIndex = IndexOfTheme(_Theme);
             comboBoxScreenshot.SelectedIndex = (int)appSettings.ScreenshotMode;
             comboBoxImpedanceSource.SelectedIndex = (int)appSettings.ImpedanceTableSrc;
             textBoxScreenshotPath.Text = appSettings.ScreenshotSaveLocation;
+
+            comboBoxLanguage.SelectedIndex = (int)appSettings.Language;
+            checkBoxScreenshotHotkey.IsChecked = appSettings.ScreenshotHotkey;
+            checkBoxTrayLiveIcon.IsChecked = appSettings.TrayLiveIcon;
+            comboBoxTrayColor.SelectedIndex = (int)appSettings.TrayIconColor;
+            checkBoxStartWithWindows.IsChecked = StartupRegistration.IsEnabled();
+        }
+
+        /// <summary>
+        /// Combo box position for a stored theme. The combo box lists
+        /// <see cref="AppSettings.SelectableThemes"/> in order; Charcoal is not offered but older
+        /// settings files contain it, and it renders as Black, so it selects Black here.
+        /// </summary>
+        private static int IndexOfTheme(Theme theme)
+        {
+            int index = Array.IndexOf(AppSettings.SelectableThemes, theme);
+            if (index >= 0)
+                return index;
+
+            index = Array.IndexOf(AppSettings.SelectableThemes, Theme.Black);
+            return index >= 0 ? index : 0;
+        }
+
+        private static Theme ThemeAt(int index)
+        {
+            var themes = AppSettings.SelectableThemes;
+            if (index < 0 || index >= themes.Length)
+                return Theme.DarkMintGradient;
+
+            return themes[index];
         }
 
         private void CheckBoxAutoRefresh_Click(object sender, RoutedEventArgs e)
@@ -80,6 +111,31 @@ namespace ZenTimings.Windows
             appSettings.ScreenshotMode = (ScreenshotType)comboBoxScreenshot.SelectedIndex;
             appSettings.ScreenshotSaveLocation = textBoxScreenshotPath.Text.Trim();
             appSettings.ImpedanceTableSrc = (ImpedanceTableSource)comboBoxImpedanceSource.SelectedIndex;
+
+            var previousLanguage = appSettings.Language;
+            appSettings.Language = (AppLanguage)Math.Max(0, comboBoxLanguage.SelectedIndex);
+            appSettings.ScreenshotHotkey = (bool)checkBoxScreenshotHotkey.IsChecked;
+            appSettings.TrayLiveIcon = (bool)checkBoxTrayLiveIcon.IsChecked;
+            appSettings.TrayIconColor = (TrayColor)Math.Max(0, comboBoxTrayColor.SelectedIndex);
+
+            // Take effect now rather than on the next launch.
+            (Application.Current.MainWindow as MainWindow)?.ApplyHotKeySetting();
+            (Application.Current.MainWindow as MainWindow)?.ApplyTraySetting();
+
+            bool startWithWindows = (bool)checkBoxStartWithWindows.IsChecked;
+            if (startWithWindows != StartupRegistration.IsEnabled())
+            {
+                if (StartupRegistration.Apply(startWithWindows))
+                {
+                    appSettings.StartWithWindows = startWithWindows;
+                }
+                else
+                {
+                    // The registry is the source of truth; reflect the failure instead of lying.
+                    checkBoxStartWithWindows.IsChecked = StartupRegistration.IsEnabled();
+                    appSettings.StartWithWindows = StartupRegistration.IsEnabled();
+                }
+            }
 
             appSettings.Save();
 
@@ -113,7 +169,8 @@ namespace ZenTimings.Windows
 
             if (_AdvancedMode != appSettings.AdvancedMode ||
                 _ImpedanceTableSource != appSettings.ImpedanceTableSrc ||
-                _CornerRadius != appSettings.CornerRadius)
+                _CornerRadius != appSettings.CornerRadius ||
+                previousLanguage != appSettings.Language)
             {
                 buttonSettingsRestart.Visibility = Visibility.Visible;
                 appSettings.Save();
@@ -165,7 +222,7 @@ namespace ZenTimings.Windows
 
         private void ComboBoxTheme_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            appSettings.AppTheme = (Theme)comboBoxTheme.SelectedIndex;
+            appSettings.AppTheme = ThemeAt(comboBoxTheme.SelectedIndex);
             appSettings.ApplyTheme();
         }
 

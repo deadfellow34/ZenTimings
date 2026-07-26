@@ -113,6 +113,28 @@
       <Link>Common\UpdaterPersistenceProvider.cs</Link>
     </Compile>
     <Compile Include="AgesaHelper.cs" />
+    <Compile Include="Controls\Sparkline.cs" />
+    <Compile Include="HotKeyManager.cs" />
+    <Compile Include="JsonWriter.cs" />
+    <Compile Include="Localization\Loc.cs" />
+    <Compile Include="OcProfile.cs" />
+    <Compile Include="SpdRatedTimings.cs" />
+    <Compile Include="TelemetryLogger.cs" />
+    <Compile Include="TimingTooltips.cs" />
+    <Compile Include="TrayIconRenderer.cs" />
+    <Compile Include="BenchmarkHistory.cs" />
+    <Compile Include="Converters\ClockRatioConverter.cs" />
+    <Compile Include="LiveSnapshot.cs" />
+    <Compile Include="MemoryBandwidthTest.cs" />
+    <Compile Include="MemoryLatencyTest.cs" />
+    <Compile Include="ReferenceProfiles.cs" />
+    <Compile Include="UmcSnapshot.cs" />
+    <Compile Include="WheaMonitor.cs" />
+    <Compile Include="WindowCapture.cs" />
+    <Compile Include="Windows\TextPromptWindow.cs" />
+    <Compile Include="Windows\OcToolsWindow.xaml.cs">
+      <DependentUpon>OcToolsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\LegacyDDR5APUTimingsPanel.xaml.cs">
       <DependentUpon>LegacyDDR5APUTimingsPanel.xaml</DependentUpon>
     </Compile>
@@ -154,6 +176,12 @@
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="Windows\DriverUpdateWindow.xaml.cs">
       <DependentUpon>DriverUpdateWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\MemoryLatencyWindow.xaml.cs">
+      <DependentUpon>MemoryLatencyWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\OcProfilesWindow.xaml.cs">
+      <DependentUpon>OcProfilesWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Windows\SpdInfoWindow.xaml.cs">
       <DependentUpon>SpdInfoWindow.xaml</DependentUpon>
@@ -224,6 +252,18 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="Windows\OcToolsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\MemoryLatencyWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\OcProfilesWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Windows\SpdInfoWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -421,6 +461,30 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\PawnIO\PawnIO_setup.exe" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Loaded by reflection at runtime (see OHWMPlugin), never referenced at compile time.
+         LibreHardwareMonitorLib is preferred; OpenHardwareMonitorLib is the fallback. HidSharp is
+         LibreHardwareMonitorLib's only non-framework dependency (the motherboard path does not call
+         into it, but ship it so no code path can hit a missing-assembly error). -->
+    <Content Include="OpenHardwareMonitorLib.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="LibreHardwareMonitorLib.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="HidSharp.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Legacy port I/O, loaded by ZenStates-Core by filename. It used to be dropped into the
+         output folder by hand, which meant a fresh build produced a folder that would not run. -->
+    <Content Include="inpoutx64.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Opened by Help -> Changelog, which reads it from the exe directory. -->
+    <Content Include="Changelog.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="ComputeVersionFromGit" BeforeTargets="PrepareForBuild">

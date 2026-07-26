@@ -1,11 +1,71 @@
 using AdonisUI;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Reflection;
 using System.Windows;
+using Microsoft.Win32;
+using ZenTimings.Localization;
 
 namespace ZenTimings
 {
+    /// <summary>
+    /// "Start with Windows" via the per-user Run key. HKCU only - no elevation, no service,
+    /// and the user can always remove it from Task Manager's startup tab.
+    /// </summary>
+    internal static class StartupRegistration
+    {
+        private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string ValueName = "ZenTimings";
+
+        public static bool IsEnabled()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKey, false))
+                {
+                    return key?.GetValue(ValueName) != null;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool Apply(bool enabled)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKey, true))
+                {
+                    if (key == null)
+                        return false;
+
+                    if (enabled)
+                    {
+                        string path = Assembly.GetEntryAssembly()?.Location;
+                        if (string.IsNullOrEmpty(path))
+                            return false;
+
+                        key.SetValue(ValueName, "\"" + path + "\"");
+                    }
+                    else if (key.GetValue(ValueName) != null)
+                    {
+                        key.DeleteValue(ValueName, false);
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
     [Serializable]
     public sealed class AppSettings : INotifyPropertyChanged
     {
@@ -57,6 +117,22 @@ namespace ZenTimings
         {
             AOD,
             APOB
+        }
+
+        /// <summary>
+        /// Ink for the live tray icon. White is unreadable on a light taskbar and the accent
+        /// colours are unreadable on a dark one, so this is a user choice rather than a constant.
+        /// Order must match the Options combo box.
+        /// </summary>
+        public enum TrayColor : int
+        {
+            White,
+            Green,
+            Cyan,
+            Yellow,
+            Orange,
+            Red,
+            Black,
         }
 
         public AppSettings Create(bool save = true)
@@ -113,29 +189,60 @@ namespace ZenTimings
             }
         }
 
+        private static Uri ThemeUri(string name)
+        {
+            return new Uri($"pack://application:,,,/ZenTimings;component/Themes/{name}.xaml", UriKind.Absolute);
+        }
+
+        // Keyed by enum value, not by position. The theme list, the enum and the Options combo box
+        // used to be three parallel lists of different lengths: Charcoal.xaml is not compiled in, so
+        // every entry after it was shifted and Theme.Black indexed one past the end of the array.
+        private static readonly Dictionary<Theme, Uri> ThemeUris = new Dictionary<Theme, Uri>
+        {
+            { Theme.Light,            ThemeUri("Light") },
+            { Theme.Dark,             ThemeUri("Dark") },
+            { Theme.DarkMint,         ThemeUri("DarkMint") },
+            { Theme.DarkMintGradient, ThemeUri("DarkMintGradient") },
+            { Theme.AsusRog,          ThemeUri("AsusRog") },
+            { Theme.Dracula,          ThemeUri("Dracula") },
+            { Theme.RetroWave,        ThemeUri("RetroWave") },
+            { Theme.BurntOrange,      ThemeUri("BurntOrange") },
+            // Charcoal.xaml exists in the repo but is not part of the build, so it maps to Black.
+            // Settings files written by older builds do contain "Charcoal" - they must keep working.
+            { Theme.Charcoal,         ThemeUri("Black") },
+            { Theme.Black,            ThemeUri("Black") },
+        };
+
         public void ApplyTheme()
         {
-            Uri[] themeUri = new Uri[]
+            Uri uri;
+            if (!ThemeUris.TryGetValue(AppTheme, out uri))
             {
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/Light.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/Dark.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/DarkMint.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/DarkMintGradient.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/AsusRog.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/Dracula.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/RetroWave.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/BurntOrange.xaml", UriKind.Absolute),
-                //new Uri("pack://application:,,,/ZenTimings;component/Themes/Charcoal.xaml", UriKind.Absolute),
-                new Uri("pack://application:,,,/ZenTimings;component/Themes/Black.xaml", UriKind.Absolute),
-            };
+                AppTheme = Theme.DarkMintGradient;
+                uri = ThemeUris[AppTheme];
+            }
 
-            ResourceLocator.SetColorScheme(Application.Current.Resources, themeUri[(int)AppTheme]);
+            ResourceLocator.SetColorScheme(Application.Current.Resources, uri);
             try
             {
                 ThemedAdonisWindow.RefreshAllOpenWindows();
             }
             catch { }
         }
+
+        /// <summary>The themes offered in Options, in combo box order.</summary>
+        public static readonly Theme[] SelectableThemes =
+        {
+            Theme.Light,
+            Theme.Dark,
+            Theme.DarkMint,
+            Theme.DarkMintGradient,
+            Theme.AsusRog,
+            Theme.Dracula,
+            Theme.RetroWave,
+            Theme.BurntOrange,
+            Theme.Black,
+        };
 
         public string Version { get; set; } = new Version(VersionMajor, VersionMinor).ToString();
 
@@ -170,7 +277,11 @@ namespace ZenTimings
         public Theme AppTheme { get; set; } = Theme.DarkMintGradient;
         public ScreenshotType ScreenshotMode { get; set; } = ScreenshotType.Window;
         public string ScreenshotSaveLocation { get; set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
-        public bool CheckForUpdates { get; set; } = true;
+        /// <summary>
+        /// Kept only so old settings files still deserialise. The updater is not wired up in this
+        /// fork - see SplashWindow.Start - so this value has no effect.
+        /// </summary>
+        public bool CheckForUpdates { get; set; } = false;
         public string UpdaterSkippedVersion { get; set; } = "";
         public string DriverUpdateLastSkippedVersion { get; set; } = "";
         public string UpdaterRemindLaterAt { get; set; } = "";
@@ -193,5 +304,24 @@ namespace ZenTimings
         public bool FirstStart { get; set; } = true;
         public int CornerRadius { get; set; } = 0;
         public ImpedanceTableSource ImpedanceTableSrc { get; set; } = ImpedanceTableSource.APOB;
+
+        // --- Added in this fork ---
+
+        /// <summary>UI language. Applied at startup; changing it needs a restart.</summary>
+        public AppLanguage Language { get; set; } = AppLanguage.English;
+
+        /// <summary>Ctrl+Alt+S captures a screenshot and names it from the current memory config.</summary>
+        public bool ScreenshotHotkey { get; set; } = true;
+
+        /// <summary>Draw the hottest DIMM temperature onto the tray icon.</summary>
+        public bool TrayLiveIcon { get; set; }
+
+        /// <summary>Ink used for <see cref="TrayLiveIcon"/>.</summary>
+        public TrayColor TrayIconColor { get; set; } = TrayColor.White;
+
+        public bool StartWithWindows { get; set; }
+
+        /// <summary>How many samples the main-window sparklines keep.</summary>
+        public int HistoryLength { get; set; } = 120;
     }
 }

@@ -32,17 +32,32 @@
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Vertical" Margin="15,15,5,15" Grid.ColumnSpan="6" Grid.Row="0" Width="424">
-                <!-- TextBlock Text="Changelog" FontSize="14" FontWeight="Bold" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" /-->
-                <TextBlock Text="v1.39" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
+                <TextBlock Text="v1.39 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
+                <TextBlock Text="Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on purpose: an upstream release would overwrite these changes."
+                           TextWrapping="WrapWithOverflow" Height="auto" Margin="0,4,0,0" Opacity="0.75" />
 
                 <TextBlock Text="" />
-                <TextBlock Text=" - Fixed Proc DQ Drive Stength sometimes showing as N/A on auto" TextWrapping="WrapWithOverflow" />
-                <TextBlock Text=" - Fixed crash on DragonRange family" TextWrapping="WrapWithOverflow" />
-                <TextBlock Text=" - Fixed a bug in smbus driver which was leading to conflict with HWInfo" TextWrapping="WrapWithOverflow" />
-                <TextBlock Text=" - Updated Telemetry window and added option to auto-open" TextWrapping="WrapWithOverflow" />
-                <TextBlock Text=" - Added SPD info window" TextWrapping="WrapWithOverflow" />
-                <TextBlock Text=" - Added ECC indicator (PR-99 by tsg2k2)" TextWrapping="WrapWithOverflow" />
-                <TextBlock Text=" - Hynix IC revision parser should not longer display incorrect 'O-die'" TextWrapping="WrapWithOverflow" />
+                <TextBlock Text="Monitoring" FontWeight="Bold" Height="auto" />
+                <TextBlock Text=" - Live CPU Die and DDR5 DIMM temperatures on the main window, each with a sparkline of its recent history and a min/max/avg tooltip" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Total DIMM power, summed from the on-module PMICs" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Tray icon can show the hottest temperature, in a colour of your choice (Options &#8594; Tray icon colour)" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - CSV telemetry logging" TextWrapping="WrapWithOverflow" Height="auto" />
+
+                <TextBlock Text="" />
+                <TextBlock Text="Timings" FontWeight="Bold" Height="auto" />
+                <TextBlock Text=" - tCCD_L, tCCD_L_WR and tCCD_L_WR2, decoded from UMC registers ZenStates-Core does not read" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - CA / CK / CS on-die termination per bank group (ODT A and ODT B)" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Timings panel rebalanced so all three columns end on the same row" TextWrapping="WrapWithOverflow" Height="auto" />
+
+                <TextBlock Text="" />
+                <TextBlock Text="Convenience" FontWeight="Bold" Height="auto" />
+                <TextBlock Text=" - Turkish user interface (Options &#8594; Language)" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Ctrl+Alt+S screenshot hotkey, named from the current memory configuration" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Start with Windows" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Tray glyph drawn at the shell's real icon size, so it stays sharp on scaled displays" TextWrapping="WrapWithOverflow" Height="auto" />
+
+                <TextBlock Text="" />
+                <TextBlock Text="Help &#8594; Changelog lists the upstream history." Height="auto" Opacity="0.75" TextWrapping="WrapWithOverflow" />
             </StackPanel>
             <Border Padding="4 10" Grid.ColumnSpan="6" Grid.Row="2">
                 <Button x:Name="Changelog_Close" Content="OK" Width="80" IsCancel="True" />

@@ -1,4 +1,4 @@
-//#define BETA
+﻿//#define BETA
 
 using AdonisUI.Controls;
 using System;
@@ -18,6 +18,7 @@ using System.Windows.Threading;
 using ZenStates.Core;
 using ZenStates.Core.DRAM;
 using ZenTimings.Controls;
+using ZenTimings.Localization;
 using ZenTimings.Plugin;
 using ZenTimings.ViewModels;
 using ZenTimings.Windows;
@@ -46,12 +47,30 @@ namespace ZenTimings
         private Windows.TelemetryWindow telemetryWnd = null;
         private OptionsDialog optionsWnd = null;
         private AboutDialog aboutWnd = null;
+        private OcToolsWindow ocToolsWnd = null;
         internal readonly Forms.NotifyIcon _notifyIcon;
         private bool compatMode;
         private Control timingsPanel;
         private readonly MainViewModel mainViewModel;
         private float lastMclk = 0;
         //private Computer computer;
+
+        private MemType memType;
+        private readonly TelemetryLogger telemetryLogger = new TelemetryLogger();
+        private readonly HotKeyManager screenshotHotKey = new HotKeyManager();
+        private readonly HotKeyManager clipboardHotKey = new HotKeyManager();
+        private const int ScreenshotHotKeyId = 0x5A54;   // 'ZT'
+        private const int ClipboardHotKeyId = 0x5A55;
+        private System.Drawing.Icon dynamicTrayIcon;
+        private string lastTrayText;
+
+        // tCCD_L family, not decoded by ZenStates-Core. Found by diffing register dumps.
+        //   tCCD_L     = 0x50198[7:3] + 5   (5 bits, so max 36)
+        //   tCCD_L_WR2 = 0x502E0[5:0] + 7
+        // tCCD_L_WR is in no UMC register. Dumps differing only in it are byte-identical across
+        // both channel windows, the AOD table and the SPD. See ReadTccdlWrFromApob.
+        private const uint TccdlRegister = 0x50198u;
+        private const uint TccdlWr2Register = 0x502E0u;
 
         private readonly string AssemblyProduct = ((AssemblyProductAttribute)Attribute.GetCustomAttribute(
             Assembly.GetExecutingAssembly(),
@@ -161,6 +180,7 @@ namespace ZenTimings
                 SplashWindow.Loading("Timings");
 
                 var memoryType = cpu.GetMemoryConfig().Type;
+                memType = memoryType;
 
                 // Motherboard logo
                 var motherboardLogoName = VendorUtils.GetMotherboardLogo(cpu.systemInfo);
@@ -218,14 +238,24 @@ namespace ZenTimings
 
                 AddTimingsPanel(memoryType);
 
+                // Register addresses only verified on Zen4/Zen5 desktop parts, so APUs are excluded.
+                mainViewModel.IsTccdlVisible =
+                    (memoryType == MemType.DDR5 || memoryType == MemType.LPDDR5)
+                    && (cpu.info.family == Cpu.Family.FAMILY_19H || cpu.info.family == Cpu.Family.FAMILY_1AH)
+                    && cpu.smu.SMU_TYPE != SMU.SmuType.TYPE_APU2;
+
+                TimingTooltips.Attach(timingsPanel, mainViewModel);
+
                 if (settings.AdvancedMode)
                 {
                     if (memoryType == MemType.DDR4 || memoryType == MemType.LPDDR4)
                     {
                         ReadSVI();
                         ReadDDR4MemoryConfig();
+                        ReadVddioFromSio();
                     }
                     StartAutoRefresh();
+                    UpdateLiveReadouts();
                 }
             }
             catch (Exception ex)
@@ -323,7 +353,11 @@ namespace ZenTimings
             foreach (IPlugin plugin in plugins)
                 plugin?.Close();
 
+            screenshotHotKey?.Dispose();
+            telemetryLogger?.Dispose();
+
             _notifyIcon?.Dispose();
+            dynamicTrayIcon?.Dispose();
             AsusWmi?.Dispose();
             //cpu?.io?.Close(settings.AutoUninstallDriver);
             cpu?.Dispose();
@@ -564,6 +598,62 @@ namespace ZenTimings
             BMC?.Dispose();
         }
 
+        // Best-effort DRAM voltage (VDIMM) via the motherboard Super I/O chip using OpenHardwareMonitor.
+        // DDR4 exposes no on-module voltage telemetry; when the ACPI/APCB and ASUS-WMI paths both fail
+        // (VDIMM still "N/A"), the SIO sensor is the last resort. Requires OpenHardwareMonitorLib.dll next
+        // to the exe and a loadable ring0 driver — silently leaves N/A if unavailable.
+        private void ReadVddioFromSio()
+        {
+            DDR4TimingsPanel panel = timingsPanel as DDR4TimingsPanel;
+            if (panel == null || panel.textBoxMemVddio.Text != "N/A")
+                return;
+
+            OHWMPlugin ohwm = null;
+            try
+            {
+                ohwm = new OHWMPlugin();
+                if (!ohwm.IsAvailable)
+                    return;
+
+                ohwm.Open();
+
+                var sensors = ohwm.Sensors;
+                if (sensors == null || sensors.Count == 0)
+                    return;
+
+                // Diagnostic dump so the correct DRAM channel can be identified on boards that
+                // report generic "Voltage #N" names.
+                try
+                {
+                    string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+                    File.WriteAllLines(
+                        Path.Combine(exeDir, "ohwm_voltages.txt"),
+                        sensors.Select(s => $"[{s.Index}] {s.Name} = {s.Value:F3} V"));
+                }
+                catch { /* diagnostics are best-effort */ }
+
+                var dram = sensors.FirstOrDefault(s => s.Name != null &&
+                    (s.Name.IndexOf("dram", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     s.Name.IndexOf("dimm", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     s.Name.IndexOf("vddio", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     s.Name.IndexOf("memory", StringComparison.OrdinalIgnoreCase) >= 0));
+
+                if (dram?.Value != null && dram.Value > 0.9 && dram.Value < 2.2)
+                {
+                    panel.textBoxMemVddio.Text = $"{dram.Value:F3}V";
+                    panel.labelMemVddio.IsEnabled = true;
+                }
+            }
+            catch
+            {
+                // SIO access unavailable (missing DLL, blocked ring0 driver, unsupported board) — keep N/A.
+            }
+            finally
+            {
+                ohwm?.Close();
+            }
+        }
+
         //TODO: Replace with a call to DLL
         private BaseDramTimings ReadTimings(uint offset = 0)
         {
@@ -673,6 +763,401 @@ namespace ZenTimings
                 PowerCfgTimer.Stop();
         }
 
+        // Reads live CPU Die/memory temperatures and the base clock (BCLK), pushing them to the view model.
+        // Safe to call from a background thread: MainViewModel marshals PropertyChanged to the UI thread.
+        private void UpdateLiveReadouts()
+        {
+            if (mainViewModel == null || cpu == null)
+                return;
+
+            // CPU Die (Tctl/Tdie) temperature
+            try
+            {
+                float? cpuTemp = cpu.GetCpuTemperature();
+                if (cpuTemp.HasValue && cpuTemp.Value > 0 && cpuTemp.Value < 150)
+                {
+                    mainViewModel.UpdateCpuTemperature(cpuTemp.Value);
+                    mainViewModel.IsCpuTemperatureVisible = true;
+                }
+                else
+                {
+                    mainViewModel.IsCpuTemperatureVisible = false;
+                }
+            }
+            catch
+            {
+                mainViewModel.IsCpuTemperatureVisible = false;
+            }
+
+            // Memory temperature - DDR5 on-module thermal sensors (SPD hub); one entry per populated
+            // DIMM. Not available on DDR4 (no SPD thermal sensor via this path). The same pass adds
+            // up the PMIC power readings, which come from the same SPD structures.
+            try
+            {
+                var samples = new List<DimmTemperatureSample>();
+                double totalWatts = 0;
+                bool anyPower = false;
+
+                var spdInfo = cpu.memoryConfig?.SpdInfo;
+                var modules = cpu.memoryConfig?.Modules;
+                if (spdInfo != null)
+                {
+                    // Enumeration order matches modules[] (same correlation TelemetryWindow uses),
+                    // so index gives the physical slot label. Increment for every entry, valid or not.
+                    int index = 0;
+                    foreach (var entry in spdInfo)
+                    {
+                        var thermal = entry.Value.ThermalData;
+                        if (thermal != null && thermal.IsValid && thermal.TemperatureC > 0)
+                        {
+                            string slot = (modules != null && index < modules.Count)
+                                ? modules[index]?.Slot
+                                : null;
+                            samples.Add(new DimmTemperatureSample
+                            {
+                                Label = $"DIMM{index}",
+                                Slot = string.IsNullOrEmpty(slot) ? null : slot,
+                                Celsius = thermal.TemperatureC,
+                            });
+                        }
+
+                        var pmic = entry.Value.PmicData;
+                        if (pmic != null && pmic.IsValid && pmic.TotalW > 0)
+                        {
+                            totalWatts += pmic.TotalW;
+                            anyPower = true;
+                        }
+
+                        index++;
+                    }
+                }
+
+                if (samples.Count > 0)
+                {
+                    mainViewModel.UpdateMemoryTemperatures(samples);
+                    mainViewModel.IsMemoryTemperatureVisible = true;
+                }
+                else
+                {
+                    mainViewModel.IsMemoryTemperatureVisible = false;
+                }
+
+                if (anyPower)
+                {
+                    mainViewModel.MemoryPowerText = $"{totalWatts:F2} W";
+                    mainViewModel.IsMemoryPowerVisible = true;
+                }
+                else
+                {
+                    mainViewModel.IsMemoryPowerVisible = false;
+                }
+            }
+            catch
+            {
+                mainViewModel.IsMemoryTemperatureVisible = false;
+                mainViewModel.IsMemoryPowerVisible = false;
+            }
+
+            // Base clock (BCLK)
+            try
+            {
+                double? bclk = cpu.GetBclk();
+                mainViewModel.BclkString = (bclk.HasValue && bclk.Value > 0)
+                    ? $"{bclk.Value:F2}"
+                    : "N/A";
+            }
+            catch
+            {
+                mainViewModel.BclkString = "N/A";
+            }
+
+            ReadTccdl();
+            UpdateTrayIcon();
+            RefreshWheaCount();
+            LogTelemetryRow();
+        }
+
+        private readonly WheaMonitor wheaMonitor = new WheaMonitor();
+        private DateTime lastWheaPoll = DateTime.MinValue;
+        private int wheaBusy;
+
+        /// <summary>
+        /// Re-reads the WHEA counters, but far less often than the rest of the loop: the query
+        /// walks the System event log, which is orders of magnitude more expensive than reading a
+        /// register, and errors do not arrive fast enough for a 2-second cadence to matter.
+        /// </summary>
+        /// <remarks>
+        /// Always queued rather than run inline. This is reached from two directions - the refresh
+        /// thread, and once from the constructor, which is the UI thread - and an event-log query
+        /// takes tens of milliseconds on a quiet machine and considerably longer on one with a
+        /// large System log. The flag keeps a second query out while one is running: the tick
+        /// handler starts a fresh thread every time, so two of them can otherwise overlap and race
+        /// each other's counters.
+        /// </remarks>
+        private void RefreshWheaCount()
+        {
+            if ((DateTime.Now - lastWheaPoll).TotalSeconds < 30)
+                return;
+
+            if (Interlocked.CompareExchange(ref wheaBusy, 1, 0) != 0)
+                return;
+
+            lastWheaPoll = DateTime.Now;
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    wheaMonitor.Refresh();
+                    mainViewModel.UpdateWhea(wheaMonitor);
+                }
+                catch
+                {
+                    // Never let a log hiccup stop the refresh loop.
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref wheaBusy, 0);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Reads tCCD_L and tCCD_L_WR2 from the UMC registers, tCCD_L_WR from the APOB.
+        /// Values outside a plausible range are treated as "not available" rather than displayed,
+        /// because the encoding was derived empirically and may not hold on every AGESA.
+        /// </summary>
+        private void ReadTccdl()
+        {
+            if (!mainViewModel.IsTccdlVisible)
+                return;
+
+            try
+            {
+                uint raw198 = cpu.ReadDword(TccdlRegister);
+                uint raw2E0 = cpu.ReadDword(TccdlWr2Register);
+
+                uint tccdl = ((raw198 >> 3) & 0x1Fu) + 5u;
+                uint tccdlWr2 = (raw2E0 & 0x3Fu) + 7u;
+
+                mainViewModel.TccdlValue = (tccdl >= 8 && tccdl <= 36) ? tccdl : 0;
+                mainViewModel.TccdlWr2Value = (tccdlWr2 >= 8 && tccdlWr2 <= 70) ? tccdlWr2 : 0;
+                mainViewModel.TccdlWrValue = ReadTccdlWrFromApob(
+                    mainViewModel.TccdlValue, mainViewModel.TccdlWr2Value);
+            }
+            catch
+            {
+                mainViewModel.TccdlValue = 0;
+                mainViewModel.TccdlWr2Value = 0;
+                mainViewModel.TccdlWrValue = 0;
+            }
+        }
+
+        /// <summary>
+        /// tCCD_L_WR from the APOB, or 0 if it cannot be located. AGESA stores the three
+        /// same-bank-group write timings as consecutive nCK values, one copy per channel. The
+        /// search anchors on tCCD_L and tCCD_L_WR2 rather than a fixed offset, so it survives an
+        /// APOB layout change.
+        /// </summary>
+        private uint ReadTccdlWrFromApob(uint tccdl, uint tccdlWr2)
+        {
+            if (tccdl == 0 || tccdlWr2 == 0)
+                return 0;
+
+            var apob = cpu?.info.apob;
+            if (apob == null || !apob.IsAvailable)
+                return 0;
+
+            byte[] ext = apob.RawExtendedData;
+            if (ext == null)
+                return 0;
+
+            // Zen5 packs the fields as uint16, Zen4 as uint32. Strict first: a strict hit also
+            // proves the block holds applied values rather than SPD defaults.
+            return FindTccdlWr(ext, tccdl, tccdlWr2, 2, true)
+                ?? FindTccdlWr(ext, tccdl, tccdlWr2, 4, true)
+                ?? FindTccdlWr(ext, tccdl, tccdlWr2, 2, false)
+                ?? FindTccdlWr(ext, tccdl, tccdlWr2, 4, false)
+                ?? 0;
+        }
+
+        /// <summary>
+        /// Finds the [tCCD_L, tCCD_L_WR, tCCD_L_WR2] run at the given element width and returns the
+        /// middle value, or null if it is missing or the channels disagree.
+        /// </summary>
+        /// <remarks>
+        /// Strict mode also requires the run's tCCD_L to match the live one. Zen4 fills the run from
+        /// the SPD, so loose mode drops that check and matches on tCCD_L_WR2 plus the constant 8 in
+        /// front of the run. A loose hit can be an SPD default rather than the applied value.
+        /// </remarks>
+        private static uint? FindTccdlWr(byte[] ext, uint tccdl, uint tccdlWr2, int width, bool strict)
+        {
+            uint? found = null;
+
+            for (var i = width; i + 3 * width <= ext.Length; i += width)
+            {
+                if (ReadField(ext, i + 2 * width, width) != tccdlWr2)
+                    continue;
+
+                uint slot = ReadField(ext, i, width);
+                bool match = strict
+                    ? slot == tccdl
+                    : slot >= 8 && slot <= 36 && ReadField(ext, i - width, width) == 8;
+
+                if (!match)
+                    continue;
+
+                uint candidate = ReadField(ext, i + width, width);
+
+                // JEDEC derives both from the same terms, so tCCD_L_WR is never below tCCD_L_WR2.
+                if (candidate < tccdlWr2)
+                    continue;
+
+                if (found.HasValue && found.Value != candidate)
+                    return null;
+
+                found = candidate;
+            }
+
+            return found;
+        }
+
+        private static uint ReadField(byte[] buffer, int offset, int width)
+        {
+            return width == 2 ? BitConverter.ToUInt16(buffer, offset) : BitConverter.ToUInt32(buffer, offset);
+        }
+
+        /// <summary>Draws the hottest DIMM temperature onto the tray icon when enabled.</summary>
+        private void UpdateTrayIcon()
+        {
+            if (_notifyIcon == null)
+                return;
+
+            if (!settings.TrayLiveIcon)
+            {
+                if (lastTrayText != null)
+                {
+                    Dispatcher.Invoke(() => RestoreDefaultTrayIcon());
+                    lastTrayText = null;
+                }
+                return;
+            }
+
+            double dimm = mainViewModel.HottestDimmTemperature;
+            double hottest = dimm > 0 ? dimm : mainViewModel.CpuTemperature;
+
+            if (hottest <= 0)
+                return;
+
+            // Hover tooltip always reflects the live value and its source.
+            string tip = dimm > 0
+                ? $"ZenTimings - DIMM {hottest:F1} °C"
+                : $"ZenTimings - CPU {hottest:F1} °C";
+
+            string text = ((int)Math.Round(hottest)).ToString();
+
+            Dispatcher.Invoke(() =>
+            {
+                try { _notifyIcon.Text = tip; } catch { /* NotifyIcon.Text has a length cap; ignore */ }
+
+                // The drawn glyph only needs redrawing when the rounded number changes.
+                if (text == lastTrayText)
+                    return;
+                lastTrayText = text;
+
+                var icon = TrayIconRenderer.Create(text, TrayInkColor());
+                if (icon == null)
+                    return;
+
+                _notifyIcon.Icon = icon;
+
+                if (dynamicTrayIcon != null)
+                    dynamicTrayIcon.Dispose();
+
+                dynamicTrayIcon = icon;
+            });
+        }
+
+        /// <summary>
+        /// The configured tray ink. The shades are picked to stay legible against a taskbar rather
+        /// than to match the theme - the pure primaries GDI+ gives you go muddy at icon size.
+        /// </summary>
+        private System.Drawing.Color TrayInkColor()
+        {
+            switch (settings.TrayIconColor)
+            {
+                case AppSettings.TrayColor.Green:  return System.Drawing.Color.FromArgb(0x3D, 0xE8, 0x6A);
+                case AppSettings.TrayColor.Cyan:   return System.Drawing.Color.FromArgb(0x3D, 0xD6, 0xE8);
+                case AppSettings.TrayColor.Yellow: return System.Drawing.Color.FromArgb(0xF5, 0xD7, 0x42);
+                case AppSettings.TrayColor.Orange: return System.Drawing.Color.FromArgb(0xFF, 0xA0, 0x3A);
+                case AppSettings.TrayColor.Red:    return System.Drawing.Color.FromArgb(0xFF, 0x5C, 0x5C);
+                case AppSettings.TrayColor.Black:  return System.Drawing.Color.FromArgb(0x10, 0x10, 0x10);
+                default:                           return System.Drawing.Color.White;
+            }
+        }
+
+        private void RestoreDefaultTrayIcon()
+        {
+            _notifyIcon.Icon = Properties.Resources.ZenTimings2022;
+
+            if (dynamicTrayIcon != null)
+            {
+                dynamicTrayIcon.Dispose();
+                dynamicTrayIcon = null;
+            }
+        }
+
+        private static readonly string[] LogColumns =
+        {
+            "Timestamp", "CpuTempC", "DimmTempC", "DimmPowerW",
+            "FrequencyMTs", "MCLK", "FCLK", "UCLK",
+            "VDDCR_SOC", "MEM_VDD", "MEM_VDDQ", "MEM_VPP",
+            "tCL", "tRCDRD", "tRP", "tRAS", "tRFC", "tCCD_L", "tCCD_L_WR2",
+        };
+
+        private void LogTelemetryRow()
+        {
+            if (!telemetryLogger.IsRunning)
+                return;
+
+            try
+            {
+                var timings = mainViewModel.Timings;
+                var powerTable = mainViewModel.PowerTable;
+
+                var row = new List<string>
+                {
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    TelemetryLogger.Num(mainViewModel.CpuTemperature, "0.0"),
+                    TelemetryLogger.Num(mainViewModel.HottestDimmTemperature, "0.0"),
+                    mainViewModel.IsMemoryPowerVisible
+                        ? mainViewModel.MemoryPowerText.Replace(" W", "")
+                        : "",
+                    TelemetryLogger.Num(mainViewModel.MemoryFrequency, "0"),
+                    powerTable != null ? TelemetryLogger.Num(powerTable.MCLK, "0.##") : "",
+                    powerTable != null ? TelemetryLogger.Num(powerTable.FCLK, "0.##") : "",
+                    powerTable != null ? TelemetryLogger.Num(powerTable.UCLK, "0.##") : "",
+                    powerTable != null ? TelemetryLogger.Num(powerTable.VDDCR_SOC, "0.####") : "",
+                    TelemetryLogger.Num(mainViewModel.SwaAdcV, "0.####"),
+                    TelemetryLogger.Num(mainViewModel.SwbAdcV, "0.####"),
+                    TelemetryLogger.Num(mainViewModel.VppAdcV, "0.####"),
+                    timings != null ? timings.CL.ToString() : "",
+                    timings != null ? timings.RCDRD.ToString() : "",
+                    timings != null ? timings.RP.ToString() : "",
+                    timings != null ? timings.RAS.ToString() : "",
+                    timings != null ? timings.RFC.ToString() : "",
+                    mainViewModel.TccdlValue > 0 ? mainViewModel.TccdlValue.ToString() : "",
+                    mainViewModel.TccdlWr2Value > 0 ? mainViewModel.TccdlWr2Value.ToString() : "",
+                };
+
+                telemetryLogger.Write(row);
+            }
+            catch
+            {
+                // Logging must never take the refresh loop down with it.
+            }
+        }
+
         private void PowerCfgTimer_Tick(object sender, EventArgs e)
         {
             // Run refresh operation in a new thread
@@ -702,6 +1187,8 @@ namespace ZenTimings
                     {
                         voltagesUpdated = cpu.memoryConfig.RefreshTelemetry(settings.AutoRefreshInterval);
                     }
+
+                    UpdateLiveReadouts();
 
                     Dispatcher.Invoke(DispatcherPriority.ApplicationIdle, new Action(() =>
                     {
@@ -848,7 +1335,314 @@ namespace ZenTimings
             if (msg == InteropMethods.WM_SHOWME)
                 ShowWindow();
 
+            if (msg == HotKeyManager.WM_HOTKEY && wParam.ToInt32() == ScreenshotHotKeyId)
+            {
+                CaptureBenchmarkScreenshot();
+                handled = true;
+            }
+
+            if (msg == HotKeyManager.WM_HOTKEY && wParam.ToInt32() == ClipboardHotKeyId)
+            {
+                CaptureScreenshotToClipboard();
+                handled = true;
+            }
+
             return IntPtr.Zero;
+        }
+
+        /// <summary>
+        /// Registers or releases the global screenshot hotkey to match the current setting, so the
+        /// Options toggle takes effect immediately instead of on the next launch.
+        /// </summary>
+        public void ApplyHotKeySetting()
+        {
+            if (!settings.ScreenshotHotkey)
+            {
+                screenshotHotKey.Unregister();
+                clipboardHotKey.Unregister();
+                return;
+            }
+
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero)
+                return;
+
+            // Failure just means another application already owns the combination - not worth a dialog.
+            if (!screenshotHotKey.IsRegistered)
+                screenshotHotKey.Register(handle, ScreenshotHotKeyId,
+                    HotKeyManager.MOD_CONTROL | HotKeyManager.MOD_ALT, HotKeyManager.VK_S);
+
+            // Ctrl+Alt+C puts the same shot straight on the clipboard, for pasting into a chat or
+            // a forum post without going via a file.
+            if (!clipboardHotKey.IsRegistered)
+                clipboardHotKey.Register(handle, ClipboardHotKeyId,
+                    HotKeyManager.MOD_CONTROL | HotKeyManager.MOD_ALT, HotKeyManager.VK_C);
+        }
+
+        private Windows.OcProfilesWindow ocProfilesWnd = null;
+
+        /// <summary>Fills the OC Profiles menu with one entry per reference profile.</summary>
+        private void BuildOcProfilesMenu()
+        {
+            if (OcProfilesMenu == null)
+                return;
+
+            OcProfilesMenu.Items.Clear();
+
+            foreach (var profile in ReferenceProfiles.All)
+            {
+                var captured = profile;
+                var item = new MenuItem { Header = profile.Name };
+                item.Click += (s, e) => ShowOcProfiles(captured);
+                OcProfilesMenu.Items.Add(item);
+            }
+        }
+
+        private void ShowOcProfiles(ReferenceProfile profile)
+        {
+            if (ocProfilesWnd == null || !ocProfilesWnd.IsLoaded)
+            {
+                ocProfilesWnd = new Windows.OcProfilesWindow(mainViewModel) { Owner = this };
+                ocProfilesWnd.Show();
+            }
+            else
+            {
+                ocProfilesWnd.Activate();
+            }
+
+            ocProfilesWnd.Select(profile);
+        }
+
+        private Windows.MemoryLatencyWindow latencyWnd = null;
+
+        private void MemoryLatencyMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (latencyWnd == null || !latencyWnd.IsLoaded)
+            {
+                latencyWnd = new Windows.MemoryLatencyWindow(mainViewModel) { Owner = this };
+                latencyWnd.Show();
+            }
+            else
+            {
+                latencyWnd.Activate();
+            }
+        }
+
+        private void OcToolsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (ocToolsWnd == null || !ocToolsWnd.IsLoaded)
+            {
+                ocToolsWnd = new OcToolsWindow(mainViewModel, PowerCfgTimer)
+                {
+                    Owner = this
+                };
+                ocToolsWnd.Show();
+            }
+            else
+            {
+                ocToolsWnd.Activate();
+            }
+        }
+
+        private void ExportAsJsonMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string json = mainViewModel.GetJSON();
+
+                Forms.SaveFileDialog saveFileDialog = new Forms.SaveFileDialog
+                {
+                    Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                    DefaultExt = "json",
+                    FileName = "ZenTimings-report.json",
+                    RestoreDirectory = true
+                };
+
+                if (saveFileDialog.ShowDialog() == Forms.DialogResult.OK)
+                {
+                    File.WriteAllText(saveFileDialog.FileName, json);
+                    MessageBox.Show("JSON file exported successfully!", "Export as JSON",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while exporting: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void LoggingMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (telemetryLogger.IsRunning)
+            {
+                string path = telemetryLogger.FilePath;
+                long rows = telemetryLogger.RowsWritten;
+                telemetryLogger.Stop();
+                UpdateLoggingMenuHeader();
+
+                MessageBox.Show(
+                    $"Logging stopped.\n\n{rows} row(s) written to:\n{path}",
+                    "Telemetry Logging", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!settings.AutoRefresh || !settings.AdvancedMode)
+            {
+                MessageBox.Show(
+                    "Logging writes one row per refresh, so it needs Advanced mode with auto-refresh enabled.",
+                    "Telemetry Logging", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var saveFileDialog = new Forms.SaveFileDialog
+            {
+                Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+                DefaultExt = "csv",
+                FileName = $"ZenTimings-log-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+                RestoreDirectory = true
+            };
+
+            if (saveFileDialog.ShowDialog() != Forms.DialogResult.OK)
+                return;
+
+            try
+            {
+                telemetryLogger.Start(saveFileDialog.FileName, LogColumns);
+                UpdateLoggingMenuHeader();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not start logging:\n{ex.Message}", "Telemetry Logging",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void UpdateLoggingMenuHeader()
+        {
+            LoggingMenuItem.Header = telemetryLogger.IsRunning
+                ? Localization.Loc.T("Menu.StopLogging")
+                : Localization.Loc.T("Menu.StartLogging");
+        }
+
+        /// <summary>
+        /// Screenshot with a self-describing filename, saved straight to the configured folder.
+        /// Bound to the global hotkey so a shot can be taken without leaving a benchmark.
+        /// </summary>
+        private void CaptureBenchmarkScreenshot()
+        {
+            Screenshot screenshot = null;
+            System.Drawing.Bitmap bitmap = null;
+
+            try
+            {
+                screenshot = new Screenshot();
+                bitmap = (settings.ScreenshotMode == AppSettings.ScreenshotType.Desktop)
+                    ? screenshot.CaptureDekstop()
+                    : screenshot.CaptureActiveWindow();
+
+                if (bitmap == null)
+                    return;
+
+                string directory = settings.ScreenshotSaveLocation;
+                if (string.IsNullOrEmpty(directory))
+                    directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
+
+                if (!Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+
+                string path = Path.Combine(directory, BuildScreenshotName());
+                bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+                if (_notifyIcon != null && settings.MinimizeToTray && _notifyIcon.Visible)
+                    _notifyIcon.ShowBalloonTip(2000, "ZenTimings", "Saved " + Path.GetFileName(path), Forms.ToolTipIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                if (bitmap != null) bitmap.Dispose();
+                if (screenshot != null) screenshot.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Same capture as the file version, but handed to the clipboard so Ctrl+V pastes the
+        /// image directly. Nothing is written to disk.
+        /// </summary>
+        private void CaptureScreenshotToClipboard()
+        {
+            System.Drawing.Bitmap bitmap = null;
+
+            try
+            {
+                // Always this window, never the active one and never the desktop: the shortcut is
+                // global, so at the moment it is pressed the active window is whatever the user was
+                // actually looking at.
+                bitmap = WindowCapture.Capture(new WindowInteropHelper(this).Handle);
+
+                if (bitmap == null)
+                    return;
+
+                // Encode to PNG in memory and hand over a frozen BitmapSource: passing the GDI
+                // bitmap straight to the clipboard leaks the HBITMAP and loses the alpha channel.
+                BitmapSource source;
+                using (var buffer = new MemoryStream())
+                {
+                    bitmap.Save(buffer, System.Drawing.Imaging.ImageFormat.Png);
+                    buffer.Position = 0;
+
+                    var decoder = new PngBitmapDecoder(
+                        buffer, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                    source = decoder.Frames[0];
+                }
+
+                source.Freeze();
+
+                // The clipboard is owned by another process for a moment after any app writes to
+                // it, so a single failure is normal rather than an error worth reporting.
+                try
+                {
+                    Clipboard.SetImage(source);
+                }
+                catch
+                {
+                    Thread.Sleep(80);
+                    Clipboard.SetImage(source);
+                }
+
+                if (_notifyIcon != null && _notifyIcon.Visible)
+                    _notifyIcon.ShowBalloonTip(1500, "ZenTimings", Loc.T("Tray.CopiedToClipboard"), Forms.ToolTipIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                if (bitmap != null) bitmap.Dispose();
+            }
+        }
+
+        private string BuildScreenshotName()
+        {
+            var parts = new List<string> { "ZT" };
+
+            if (mainViewModel.MemoryFrequency > 0)
+                parts.Add($"{mainViewModel.MemoryFrequency:F0}MTs");
+
+            var timings = mainViewModel.Timings;
+            if (timings != null)
+                parts.Add($"CL{timings.CL}-{timings.RCDRD}-{timings.RP}-{timings.RAS}");
+
+            if (mainViewModel.SwaAdcV > 0)
+                parts.Add($"{mainViewModel.SwaAdcV:F3}V");
+
+            parts.Add(DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+
+            return string.Join("_", parts.ToArray()) + ".png";
         }
 
         private void DebugToolstripItem_Click(object sender, RoutedEventArgs e)
@@ -889,27 +1683,40 @@ namespace ZenTimings
 
         private void AdonisWindow_StateChanged(object sender, EventArgs e)
         {
-            // Do not refresh if app is minimized
+            // Normally refresh is paused while minimized to save resources. But the live-value tray
+            // icon needs fresh temperatures to draw, so keep refreshing when it is enabled.
             if (WindowState == WindowState.Minimized && (siWnd == null || !siWnd.IsLoaded))
-                StopAutoRefresh();
+            {
+                if (!settings.TrayLiveIcon)
+                    StopAutoRefresh();
+            }
             else if (WindowState == WindowState.Normal)
                 StartAutoRefresh();
 
-            if (WindowState == WindowState.Minimized)
-            {
-                if (settings.MinimizeToTray)
-                {
-                    _notifyIcon.Visible = true;
-                    ShowInTaskbar = false;
-                }
-            }
-            else
-            {
-                _notifyIcon.Visible = false;
-                ShowInTaskbar = true;
-            }
-
+            ShowInTaskbar = !(WindowState == WindowState.Minimized && settings.MinimizeToTray);
+            UpdateTrayVisibility();
             MinimizeFootprint();
+        }
+
+        /// <summary>
+        /// The tray icon is shown while minimized-to-tray, and also whenever the live-value tray icon
+        /// is enabled - so its temperature readout stays visible even with the window open.
+        /// </summary>
+        private void UpdateTrayVisibility()
+        {
+            if (_notifyIcon == null)
+                return;
+
+            bool minimizedToTray = WindowState == WindowState.Minimized && settings.MinimizeToTray;
+            _notifyIcon.Visible = minimizedToTray || settings.TrayLiveIcon;
+        }
+
+        /// <summary>Applies the tray live-icon setting immediately (called from Options on Apply).</summary>
+        public void ApplyTraySetting()
+        {
+            UpdateTrayVisibility();
+            lastTrayText = null;   // force a redraw on the next call regardless of the cached value
+            UpdateTrayIcon();
         }
 
         private void AdonisWindow_SizeChanged(object sender, SizeChangedEventArgs e) => MinimizeFootprint();
@@ -936,6 +1743,24 @@ namespace ZenTimings
             HwndSource source = HwndSource.FromHwnd(handle);
 
             source?.AddHook(WndProc);
+
+            ApplyHotKeySetting();
+            UpdateTrayVisibility();
+            UpdateLoggingMenuHeader();
+            BuildOcProfilesMenu();
+
+            // Decoding the JEDEC ratings means a full SPD transfer over SMBus. Do it once in the
+            // background so the first timing tooltip does not stall the UI waiting for it.
+            if (memType == MemType.DDR5 || memType == MemType.LPDDR5)
+            {
+                new Thread(() =>
+                {
+                    Thread.CurrentThread.IsBackground = true;
+                    try { SpdRatedTimings.Prewarm(); }
+                    catch (Exception ex) { Console.WriteLine(ex.Message); }
+                }).Start();
+            }
+
             //#if !DEBUG
             if (!settings.NotifiedChangelog.Equals(AssemblyVersion))
             {

@@ -31,6 +31,10 @@ namespace ZenTimings
                 Environment.Exit(0);
             }
 
+            // Resolve the UI language before the first window is constructed - the {loc:Loc} markup
+            // extension is evaluated during XAML parsing, so it has to be set by now.
+            Localization.Loc.Language = AppSettings.Instance.Language;
+
             Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
             Thread.CurrentThread.CurrentUICulture = new CultureInfo("en-US");
             FrameworkElement.LanguageProperty.OverrideMetadata(typeof(FrameworkElement), new FrameworkPropertyMetadata(

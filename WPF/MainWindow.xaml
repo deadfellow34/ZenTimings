@@ -9,6 +9,7 @@
     xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
     xmlns:converters="clr-namespace:ZenTimings.Converters"
     xmlns:controls="clr-namespace:ZenTimings.Controls"
+    xmlns:loc="clr-namespace:ZenTimings.Localization"
     adonisExtensions:CursorSpotlightExtension.RelativeSpotlightSize="0"
     mc:Ignorable="d"
     Title="ZenTimings"
@@ -45,33 +46,37 @@
                         <ColumnDefinition Width="3" />
                     </Grid.ColumnDefinitions>
                     <Menu x:Name="MainMenu" Grid.Column="0" Style="{DynamicResource MenuStyles}">
-                        <MenuItem Header="_File">
-                            <MenuItem Header="Export as HTML" Click="ExportAsHtmlMenuItem_Click" />
-                            <MenuItem Header="E_xit" Click="ExitToolStripMenuItem_Click" />
+                        <MenuItem Header="{loc:Loc Menu.File}">
+                            <MenuItem Header="{loc:Loc Menu.ExportHtml}" Click="ExportAsHtmlMenuItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.ExportJson}" Click="ExportAsJsonMenuItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.Exit}" Click="ExitToolStripMenuItem_Click" />
                             <!-- MenuItem Header="Export..." HorizontalAlignment="Left" Click="ExportToolStripMenuItem_Click" /-->
                         </MenuItem>
-                        <MenuItem Header="_Tools">
+                        <MenuItem Header="{loc:Loc Menu.Tools}">
                             <MenuItem
-                                Header="_DIMM Telemetry"
+                                Header="{loc:Loc Menu.DimmTelemetry}"
                                 Click="TelemetryMonitorToolstripMenuItem_Click"
                                 Visibility="{Binding IsDimmTelemetryAvailable, Mode=OneTime, Converter={StaticResource BoolToVis}}" />
                             <MenuItem
-                                Header="_SPD Info"
+                                Header="{loc:Loc Menu.SpdInfo}"
                                 Click="SpdInfoToolstripMenuItem_Click"
                                 Visibility="{Binding IsDimmTelemetryAvailable, Mode=OneTime, Converter={StaticResource BoolToVis}}" />
                             <Separator
                                 Foreground="{DynamicResource PanelBackground}"
                                 Visibility="{Binding IsDimmTelemetryAvailable, Mode=OneTime, Converter={StaticResource BoolToVis}}"/>
                             <MenuItem
-                                Header="System _Info"
+                                Header="{loc:Loc Menu.SystemInfo}"
                                 Click="SystemInfoToolstripMenuItem_Click"
                                 Visibility="{Binding Settings.AdvancedMode, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
-                            <MenuItem Header="_Options" Click="OptionsToolStripMenuItem_Click" />
-                            <MenuItem Header="_Debug" Click="DebugToolstripItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.OcTools}" Click="OcToolsMenuItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.MemoryLatency}" Click="MemoryLatencyMenuItem_Click" />
+                            <MenuItem x:Name="LoggingMenuItem" Header="{loc:Loc Menu.StartLogging}" Click="LoggingMenuItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.Options}" Click="OptionsToolStripMenuItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.Debug}" Click="DebugToolstripItem_Click" />
                         </MenuItem>
-                        <MenuItem Header="_Help">
-                            <MenuItem Header="_About" Click="AboutToolStripMenuItem_Click" />
-                            <MenuItem Header="Changelog" Click="MenuItem_Click_5" />
+                        <MenuItem Header="{loc:Loc Menu.Help}">
+                            <MenuItem Header="{loc:Loc Menu.About}" Click="AboutToolStripMenuItem_Click" />
+                            <MenuItem Header="{loc:Loc Menu.Changelog}" Click="MenuItem_Click_5" />
                             <Separator Foreground="{DynamicResource PanelBackground}" />
                             <MenuItem Header="Discord" Click="MenuItem_Click_2" />
                             <MenuItem Header="GitHub" Click="MenuItem_Click_3" />
@@ -82,7 +87,24 @@
                             <Separator Foreground="{DynamicResource PanelBackground}" />
                             <MenuItem Header="AM5 AGESA/UEFI/BIOS List by Reous" Click="MenuItem_Click_4" />
                         </MenuItem>
+                        <!-- Carries the profile list as its submenu. A top-level item with no
+                             children falls onto a different control template than File/Tools/Help
+                             and renders wider, with its own background. -->
+                        <MenuItem x:Name="OcProfilesMenu" Header="{loc:Loc Menu.OcProfiles}" />
                     </Menu>
+
+                    <!-- In the free space of the menu strip, not in the panel below: that corner
+                         already belongs to the vendor logo on boards that have one, and two badges
+                         fighting over it is what pushed the layout around on ROG boards. -->
+                    <TextBlock
+                        Grid.Column="0"
+                        Text="updated by deadfellow"
+                        Foreground="#3DE86A"
+                        FontSize="11"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right"
+                        Padding="0 0 10 0"
+                        IsHitTestVisible="False" />
                     <Button Grid.Column="1"
                             Width="20"
                             Height="16"
@@ -106,11 +128,10 @@
             <!-- System Info Panel -->
             <Border Style="{DynamicResource PanelStyles}"
                     Visibility="{Binding Settings.AdvancedMode, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                <!-- Logo and text share one cell so the grid measures max(text, logo) instead of
+                     their sum. In its own column the logo added its full width to the window even
+                     though the free space next to the shorter lines could hold it. -->
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="auto" />
-                    </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Vertical">
                         <TextBlock
                             x:Name="labelCPU"
@@ -129,8 +150,76 @@
                             Padding="12 0 5 5"
                             Margin="0 -5 0 0"
                         />
+
+                        <!-- Live temperatures: CPU Die (Tctl/Tdie) and DDR5 memory (SPD hub).
+                             Each readout carries a sparkline of its own recent history and a
+                             min/max/avg tooltip. -->
+                        <Border Padding="12 0 0 0"
+                                Visibility="{Binding IsAnyTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{loc:Loc Main.CpuDie}"
+                                           Padding="0 0 3 5"
+                                           Visibility="{Binding IsCpuTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                <!-- MinWidth wide enough for the longest reading this can ever show
+                                     ("100.0 °C" measures 47px at this font). Without it the row
+                                     re-flows on every refresh, because the readings are not the
+                                     same width: "8.0 °C" is 33px and "45.0 °C" is 40px. -->
+                                <TextBlock Text="{Binding CpuTemperatureText, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           MinWidth="54"
+                                           Padding="0 0 4 5"
+                                           ToolTip="{Binding CpuTemperatureToolTip, Mode=OneWay}"
+                                           Visibility="{Binding IsCpuTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+
+                                <!-- Average across the populated DIMMs, so the row keeps the same
+                                     width whether one or four are fitted. Hovering lists each
+                                     module separately. -->
+                                <TextBlock Text="{loc:Loc Main.Memory}"
+                                           Padding="0 0 3 5"
+                                           Visibility="{Binding IsMemoryTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding MemoryTemperatureText, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           MinWidth="54"
+                                           Padding="0 0 4 5"
+                                           ToolTip="{Binding MemoryTemperatureToolTip, Mode=OneWay}"
+                                           Visibility="{Binding IsMemoryTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+
+                                <TextBlock Text="{loc:Loc Main.DimmPower}"
+                                           Padding="0 0 3 5"
+                                           Visibility="{Binding IsMemoryPowerVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding MemoryPowerText, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           MinWidth="52"
+                                           Padding="0 0 4 5"
+                                           ToolTip="Sum of the on-module PMIC power readings"
+                                           Visibility="{Binding IsMemoryPowerVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+
+                                <!-- Machine-check errors since boot. Sits with the temperatures
+                                     because it is watched for the same reason: it is the first
+                                     thing that moves when a memory overclock is not stable. -->
+                                <TextBlock Text="{loc:Loc Main.Whea}"
+                                           Padding="0 0 3 5"
+                                           Visibility="{Binding IsWheaVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding WheaText, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           MinWidth="16"
+                                           Padding="0 0 5 5"
+                                           ToolTip="{Binding WheaToolTip, Mode=OneWay}"
+                                           Visibility="{Binding IsWheaVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="{x:Type TextBlock}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasWheaErrors, Mode=OneWay}" Value="True">
+                                                    <Setter Property="Foreground" Value="#FF6B6B" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                    <Border Padding="0 0 5 0" Grid.Column="2"
+                    <Border Padding="0 0 5 0" HorizontalAlignment="Right"
                             Visibility="{Binding IsMotherboardLogoVisible, Mode=OneTime, Converter={StaticResource BoolToVis}}">
 
                         <Button
