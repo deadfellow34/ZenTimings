@@ -1,3 +1,10 @@
+# v1.41 - updated by deadfellow
+
+ - Turkish interface for the Options window (Options -> Language)
+ - Clearer names: "Reference Profiles" (menu) and "My Profiles" (OC Tools);
+   logging is now "Start / Stop CSV Logging"
+ - Fixed ProcDqsOdt showing the ProcDqOdt value on DDR5 APU boards
+
 # v1.40 - updated by deadfellow
 
  Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on

@@ -12,7 +12,7 @@
     adonisExtensions:CursorSpotlightExtension.RelativeSpotlightSize="0"
     mc:Ignorable="d"
     x:Name="OptionsWindow"
-    Title="Options"
+    Title="{loc:Loc Opt.Title}"
     Height="629"
     Width="400"
     ResizeMode="NoResize"
@@ -44,9 +44,8 @@
             <TextBlock
                 Name="OptionsPopupText"
                 Background="{DynamicResource SuccessBackground}"
-                Padding="10" Opacity="0.95">
-                Settings Saved.
-            </TextBlock>
+                Padding="10" Opacity="0.95"
+                Text="{loc:Loc Opt.SettingsSaved}" />
         </Popup>
 
         <!--TabControl
@@ -71,7 +70,7 @@
         <StackPanel
             Orientation="Vertical"
             Margin="6">
-            <TextBlock Text="General" Padding="6 6" />
+            <TextBlock Text="{loc:Loc Opt.SectionGeneral}" Padding="6 6" />
             <Border Style="{DynamicResource Separator}" />
             <Grid Margin="16 8 8 8">
                 <Grid.ColumnDefinitions>
@@ -103,14 +102,14 @@
                     Grid.ColumnSpan="3"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
-                    Content="Advanced mode"
+                    Content="{loc:Loc Opt.AdvancedMode}"
                     Click="CheckBoxAdvancedMode_Click" />
 
                 <ToggleButton
                     x:Name="checkBoxAutoRefresh"
                     Grid.Column="0"
                     Grid.Row="1"
-                    Content="Auto refresh"
+                    Content="{loc:Loc Opt.AutoRefresh}"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
                     Click="CheckBoxAutoRefresh_Click" />
@@ -149,11 +148,11 @@
                     Grid.ColumnSpan="3"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
-                    Content="Single instance" />
+                    Content="{loc:Loc Opt.SingleInstance}" />
 
                 <ToggleButton
                      x:Name="checkBoxMinimizeToTray"
-                     Content="Minimize to tray"
+                     Content="{loc:Loc Opt.MinimizeToTray}"
                      Grid.Row="04"
                      Grid.Column="0"
                      Grid.ColumnSpan="3"
@@ -164,7 +163,7 @@
                     Grid.Column="0"
                     Grid.Row="5"
                     Margin="0 5 5 5"
-                    Text="Theme" VerticalAlignment="Center" />
+                    Text="{loc:Loc Opt.Theme}" VerticalAlignment="Center" />
                 <ComboBox
                     x:Name="comboBoxTheme"
                     Grid.ColumnSpan="2"
@@ -192,7 +191,7 @@
                     Grid.Column="0"
                     Grid.Row="6"
                     Margin="0 5 5 5"
-                    Text="Impedance table source" VerticalAlignment="Center" />
+                    Text="{loc:Loc Opt.ImpedanceSource}" VerticalAlignment="Center" />
 
                 <ComboBox
                     x:Name="comboBoxImpedanceSource"
@@ -285,7 +284,7 @@
         <StackPanel
             Orientation="Vertical"
             Margin="6">
-            <TextBlock  Text="Window" Padding="6 6" />
+            <TextBlock  Text="{loc:Loc Opt.SectionWindow}" Padding="6 6" />
             <Border Style="{DynamicResource Separator}" />
             <Grid Margin="16 8 8 8">
                 <Grid.ColumnDefinitions>
@@ -309,7 +308,7 @@
                      Grid.ColumnSpan="3"
                      Margin="0 5 5 5"
                      Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
-                     Content="Save position on app close" />
+                     Content="{loc:Loc Opt.SavePosition}" />
 
                 <!--ToggleButton
                      x:Name="checkBoxDisableRoundedCorners"
@@ -324,7 +323,7 @@
                     Grid.Column="0"
                     Grid.Row="2"
                     Margin="0 5 5 5"
-                    Text="Corner radius (Win 11)" VerticalAlignment="Center" />
+                    Text="{loc:Loc Opt.CornerRadius}" VerticalAlignment="Center" />
                 <ComboBox
                     x:Name="comboBoxCornerRadius"
                     Grid.ColumnSpan="2"
@@ -346,7 +345,7 @@
         <StackPanel
             Orientation="Vertical"
             Margin="6">
-            <TextBlock Text="Screenshot" Padding="6 6" />
+            <TextBlock Text="{loc:Loc Opt.SectionScreenshot}" Padding="6 6" />
             <Border Style="{DynamicResource Separator}" />
             <Grid Margin="16 8 8 8">
                 <Grid.ColumnDefinitions>
@@ -365,7 +364,7 @@
                     Grid.Column="0"
                     Grid.Row="0"
                     Margin="0 5 5 5"
-                    Text="Mode" VerticalAlignment="Center" />
+                    Text="{loc:Loc Opt.ScreenshotMode}" VerticalAlignment="Center" />
                 
                 <ComboBox
                     x:Name="comboBoxScreenshot"
@@ -386,7 +385,7 @@
                     Grid.Column="0"
                     Grid.Row="1"
                     Margin="0 5 5 5"
-                    Text="Location" VerticalAlignment="Center" />
+                    Text="{loc:Loc Opt.ScreenshotLocation}" VerticalAlignment="Center" />
 
                 <TextBox
                     x:Name="textBoxScreenshotPath"
@@ -402,7 +401,7 @@
                     x:Name="buttonBrowseScreenshotPath"
                     Grid.Column="3"
                     Grid.Row="1"
-                    Content="Browse..."
+                    Content="{loc:Loc Common.Browse}"
                     Margin="5,0,0,0"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top" Click="ButtonBrowseScreenshotPath_Click"/>
@@ -483,7 +482,7 @@
             <Button
                     x:Name="buttonSettingsApply"
                     Grid.Column="2"
-                    Content="Apply"
+                    Content="{loc:Loc Common.Apply}"
                     Margin="10 10 0 10"
                     Style="{DynamicResource {x:Static adonisUi:Styles.AccentButton}}"
                     Width="70"
@@ -492,7 +491,7 @@
             <Button
                     x:Name="buttonSettingsCancel"
                     Grid.Column="3"
-                    Content="Close"
+                    Content="{loc:Loc Common.Close}"
                     IsCancel="True"
                     Width="70"
                     Margin="10"
