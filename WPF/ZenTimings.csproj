@@ -43,7 +43,8 @@
   <PropertyGroup>
     <VersionMajor>1</VersionMajor>
     <VersionMinor>41</VersionMinor>
-    <VersionBase>$(VersionMajor).$(VersionMinor)</VersionBase>
+    <VersionPatch>1</VersionPatch>
+    <VersionBase>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionBase>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>

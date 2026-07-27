@@ -1,3 +1,7 @@
+# v1.41.1 - updated by deadfellow
+
+ - Screenshot bug fixes
+
 # v1.41 - updated by deadfellow
 
  - Turkish interface for the Options window (Options -> Language)

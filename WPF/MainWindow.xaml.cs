@@ -1526,24 +1526,108 @@ namespace ZenTimings
         }
 
         /// <summary>
+        /// Hands a picture of this window to <paramref name="consume"/>. Never the active window:
+        /// the shortcuts are global, so at the moment one is pressed the active window is the game
+        /// or benchmark the user was actually looking at, which is never what they meant to capture.
+        /// </summary>
+        /// <remarks>
+        /// The tray is exactly where ZenTimings sits while a benchmark runs, so a minimised window
+        /// is the normal case rather than the odd one, and it is handled by rendering instead of
+        /// printing - see <see cref="RenderOwnWindow"/>.
+        /// </remarks>
+        private void CaptureOwnWindow(Action<System.Drawing.Bitmap> consume)
+        {
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero)
+                return;
+
+            using (System.Drawing.Bitmap bitmap = (WindowState == WindowState.Minimized)
+                ? RenderOwnWindow()
+                : WindowCapture.Capture(handle))
+            {
+                if (bitmap != null)
+                    consume(bitmap);
+            }
+        }
+
+        /// <summary>
+        /// Draws the window from its own visual tree rather than from the screen.
+        /// </summary>
+        /// <remarks>
+        /// PrintWindow copies the surface the compositor holds for a window, and a minimised window
+        /// has none - it returns success and a blank frame. The visual tree is still laid out while
+        /// minimised, so rendering it gives the real picture, needs no restore, and so never pops the
+        /// window up over whatever is running fullscreen.
+        /// </remarks>
+        private System.Drawing.Bitmap RenderOwnWindow()
+        {
+            try
+            {
+                PresentationSource presentationSource = PresentationSource.FromVisual(this);
+                if (presentationSource == null || ActualWidth < 1 || ActualHeight < 1)
+                    return null;
+
+                // The visual tree is in device-independent units; scale to real pixels so the shot
+                // matches what PrintWindow produces on the same display.
+                double scaleX = presentationSource.CompositionTarget.TransformToDevice.M11;
+                double scaleY = presentationSource.CompositionTarget.TransformToDevice.M22;
+
+                var target = new RenderTargetBitmap(
+                    (int)Math.Round(ActualWidth * scaleX), (int)Math.Round(ActualHeight * scaleY),
+                    96 * scaleX, 96 * scaleY, PixelFormats.Pbgra32);
+                target.Render(this);
+
+                using (var buffer = new MemoryStream())
+                {
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(target));
+                    encoder.Save(buffer);
+                    buffer.Position = 0;
+
+                    // Copied out of the stream, because Bitmap keeps the stream alive otherwise.
+                    using (var decoded = new System.Drawing.Bitmap(buffer))
+                        return new System.Drawing.Bitmap(decoded);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Screenshot with a self-describing filename, saved straight to the configured folder.
         /// Bound to the global hotkey so a shot can be taken without leaving a benchmark.
         /// </summary>
         private void CaptureBenchmarkScreenshot()
         {
-            Screenshot screenshot = null;
-            System.Drawing.Bitmap bitmap = null;
+            if (settings.ScreenshotMode == AppSettings.ScreenshotType.Desktop)
+            {
+                try
+                {
+                    using (Screenshot screenshot = new Screenshot())
+                    using (System.Drawing.Bitmap bitmap = screenshot.CaptureDekstop())
+                    {
+                        if (bitmap != null)
+                            SaveScreenshot(bitmap);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
 
+                return;
+            }
+
+            CaptureOwnWindow(SaveScreenshot);
+        }
+
+        private void SaveScreenshot(System.Drawing.Bitmap bitmap)
+        {
             try
             {
-                screenshot = new Screenshot();
-                bitmap = (settings.ScreenshotMode == AppSettings.ScreenshotType.Desktop)
-                    ? screenshot.CaptureDekstop()
-                    : screenshot.CaptureActiveWindow();
-
-                if (bitmap == null)
-                    return;
-
                 string directory = settings.ScreenshotSaveLocation;
                 if (string.IsNullOrEmpty(directory))
                     directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
@@ -1561,11 +1645,6 @@ namespace ZenTimings
             {
                 Console.WriteLine(ex.Message);
             }
-            finally
-            {
-                if (bitmap != null) bitmap.Dispose();
-                if (screenshot != null) screenshot.Dispose();
-            }
         }
 
         /// <summary>
@@ -1574,18 +1653,13 @@ namespace ZenTimings
         /// </summary>
         private void CaptureScreenshotToClipboard()
         {
-            System.Drawing.Bitmap bitmap = null;
+            CaptureOwnWindow(CopyScreenshotToClipboard);
+        }
 
+        private void CopyScreenshotToClipboard(System.Drawing.Bitmap bitmap)
+        {
             try
             {
-                // Always this window, never the active one and never the desktop: the shortcut is
-                // global, so at the moment it is pressed the active window is whatever the user was
-                // actually looking at.
-                bitmap = WindowCapture.Capture(new WindowInteropHelper(this).Handle);
-
-                if (bitmap == null)
-                    return;
-
                 // Encode to PNG in memory and hand over a frozen BitmapSource: passing the GDI
                 // bitmap straight to the clipboard leaks the HBITMAP and loses the alpha channel.
                 BitmapSource source;
@@ -1619,10 +1693,6 @@ namespace ZenTimings
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-            }
-            finally
-            {
-                if (bitmap != null) bitmap.Dispose();
             }
         }
 
@@ -1833,16 +1903,27 @@ namespace ZenTimings
 
         private void ButtonScreenshot_Click(object sender, RoutedEventArgs e)
         {
-            Screenshot screenshot = new Screenshot();
-            System.Drawing.Bitmap bitmap = (settings.ScreenshotMode == AppSettings.ScreenshotType.Desktop)
-                ? screenshot.CaptureDekstop()
-                : screenshot.CaptureActiveWindow();
+            System.Drawing.Bitmap bitmap;
 
+            if (settings.ScreenshotMode == AppSettings.ScreenshotType.Desktop)
+            {
+                using (Screenshot screenshot = new Screenshot())
+                    bitmap = screenshot.CaptureDekstop();
+            }
+            else
+            {
+                // Same window the hotkey captures, so "App Window" means one thing everywhere.
+                bitmap = WindowCapture.Capture(new WindowInteropHelper(this).Handle);
+            }
+
+            if (bitmap == null)
+                return;
+
+            // SaveWindow takes ownership of the bitmap and disposes it.
             using (SaveWindow saveWnd = new SaveWindow(bitmap))
             {
                 saveWnd.Owner = Application.Current.MainWindow;
                 saveWnd.ShowDialog();
-                screenshot.Dispose();
             }
         }
 

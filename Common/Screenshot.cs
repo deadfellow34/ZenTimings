@@ -18,6 +18,10 @@ namespace ZenTimings
         [DllImport("gdi32.dll")]
         private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
 
+        [DllImport("gdi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr CreateDC(string lpszDriver, string lpszDevice, string lpszOutput,
+            IntPtr lpInitData);
+
         [DllImport("gdi32.dll")]
         private static extern IntPtr DeleteDC(IntPtr hdc);
 
@@ -46,6 +50,9 @@ namespace ZenTimings
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
+        [DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int nIndex);
+
         [StructLayout(LayoutKind.Sequential)]
         private readonly struct RECT
         {
@@ -58,19 +65,34 @@ namespace ZenTimings
         private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
         private const int SRCCOPY = 0x00CC0020;
         private const int CAPTUREBLT = 0x40000000;
+        private const int SM_XVIRTUALSCREEN = 76;
+        private const int SM_YVIRTUALSCREEN = 77;
+        private const int SM_CXVIRTUALSCREEN = 78;
+        private const int SM_CYVIRTUALSCREEN = 79;
         private bool disposedValue;
 
         private Bitmap CaptureRegion(Rectangle region)
         {
             Bitmap result;
 
-            IntPtr desktophWnd = GetDesktopWindow();
-            IntPtr desktopDc = GetWindowDC(desktophWnd);
-            IntPtr memoryDc = CreateCompatibleDC(desktopDc);
-            IntPtr bitmap = CreateCompatibleBitmap(desktopDc, region.Width, region.Height);
+            // A DC for the DISPLAY driver spans the whole virtual screen. The desktop window's DC is
+            // anchored to the primary monitor, so a region on a second screen - and every negative
+            // coordinate, which is where a monitor placed left of or above the primary one lives -
+            // came back black.
+            IntPtr screenDc = CreateDC("DISPLAY", null, null, IntPtr.Zero);
+            IntPtr fallbackhWnd = IntPtr.Zero;
+
+            if (screenDc == IntPtr.Zero)
+            {
+                fallbackhWnd = GetDesktopWindow();
+                screenDc = GetWindowDC(fallbackhWnd);
+            }
+
+            IntPtr memoryDc = CreateCompatibleDC(screenDc);
+            IntPtr bitmap = CreateCompatibleBitmap(screenDc, region.Width, region.Height);
             IntPtr oldBitmap = SelectObject(memoryDc, bitmap);
 
-            var success = BitBlt(memoryDc, 0, 0, region.Width, region.Height, desktopDc, region.Left, region.Top,
+            var success = BitBlt(memoryDc, 0, 0, region.Width, region.Height, screenDc, region.Left, region.Top,
                 SRCCOPY | CAPTUREBLT);
 
             try
@@ -84,7 +106,12 @@ namespace ZenTimings
                 SelectObject(memoryDc, oldBitmap);
                 DeleteObject(bitmap);
                 DeleteDC(memoryDc);
-                ReleaseDC(desktophWnd, desktopDc);
+
+                // Only the desktop DC is borrowed; the DISPLAY one is ours to delete.
+                if (fallbackhWnd == IntPtr.Zero)
+                    DeleteDC(screenDc);
+                else
+                    ReleaseDC(fallbackhWnd, screenDc);
             }
 
             return result;
@@ -114,7 +141,16 @@ namespace ZenTimings
 
         public Bitmap CaptureDekstop()
         {
-            return CaptureWindow(GetDesktopWindow());
+            // The desktop window reports only the primary monitor, so on a multi-monitor machine a
+            // second screen - and anything ZenTimings was showing on it - fell outside the shot.
+            int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+            int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+            if (width <= 0 || height <= 0)
+                return CaptureWindow(GetDesktopWindow());
+
+            return CaptureRegion(new Rectangle(
+                GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN), width, height));
         }
 
         protected virtual void Dispose(bool disposing)
