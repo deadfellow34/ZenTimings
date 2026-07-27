@@ -281,6 +281,66 @@
             </Grid>
         </StackPanel>
 
+        <!-- The four optional readouts on the main window's info panel. Each switch only hides a
+             row; nothing here makes an unsupported reading appear. -->
+        <StackPanel
+            Orientation="Vertical"
+            Margin="6">
+            <TextBlock Text="{loc:Loc Opt.SectionReadouts}" Padding="6 6" />
+            <Border Style="{DynamicResource Separator}" />
+            <Grid Margin="16 8 8 8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="78" />
+                    <ColumnDefinition Width="78" />
+                    <ColumnDefinition Width="auto" />
+                </Grid.ColumnDefinitions>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
+                </Grid.RowDefinitions>
+
+                <ToggleButton
+                    x:Name="checkBoxShowCpuTemp"
+                    Grid.Column="0"
+                    Grid.Row="0"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.ShowCpuTemp}" />
+
+                <ToggleButton
+                    x:Name="checkBoxShowMemTemp"
+                    Grid.Column="0"
+                    Grid.Row="1"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.ShowMemTemp}" />
+
+                <ToggleButton
+                    x:Name="checkBoxShowDimmPower"
+                    Grid.Column="0"
+                    Grid.Row="2"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.ShowDimmPower}" />
+
+                <ToggleButton
+                    x:Name="checkBoxShowWhea"
+                    Grid.Column="0"
+                    Grid.Row="3"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.ShowWhea}" />
+            </Grid>
+        </StackPanel>
+
         <StackPanel
             Orientation="Vertical"
             Margin="6">

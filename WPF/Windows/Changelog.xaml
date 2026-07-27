@@ -32,9 +32,13 @@
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Vertical" Margin="15,15,5,15" Grid.ColumnSpan="6" Grid.Row="0" Width="424">
-                <TextBlock Text="v1.41.1 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
+                <TextBlock Text="v1.41.5 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
                 <TextBlock Text="Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on purpose: an upstream release would overwrite these changes."
                            TextWrapping="WrapWithOverflow" Height="auto" Margin="0,4,0,0" Opacity="0.75" />
+
+                <TextBlock Text="" />
+                <TextBlock Text="New" FontWeight="Bold" Height="auto" />
+                <TextBlock Text=" - CPU Die temperature, memory temperature, DIMM power and the WHEA error count can each be switched on or off (Options &#8594; Readouts)" TextWrapping="WrapWithOverflow" Height="auto" />
 
                 <TextBlock Text="" />
                 <TextBlock Text="Fixed" FontWeight="Bold" Height="auto" />

@@ -404,12 +404,13 @@ namespace ZenTimings.ViewModels
             private set { _wheaToolTip = value; OnPropertyChanged(); }
         }
 
-        private bool _isWheaVisible;
-        public bool IsWheaVisible
-        {
-            get => _isWheaVisible;
-            private set { _isWheaVisible = value; OnPropertyChanged(); }
-        }
+        private bool _isWheaAvailable;
+
+        /// <summary>
+        /// Shown only when the monitor has something to report *and* the user has left the readout
+        /// switched on in Options. Same split as the temperature and DIMM-power rows below.
+        /// </summary>
+        public bool IsWheaVisible => _isWheaAvailable && (Settings?.ShowWheaCount ?? true);
 
         /// <summary>Drives the colour: anything above zero should stand out from the other readouts.</summary>
         private bool _hasWheaErrors;
@@ -427,7 +428,9 @@ namespace ZenTimings.ViewModels
 
             Application.Current?.Dispatcher.Invoke(() =>
             {
-                IsWheaVisible = monitor.IsAvailable;
+                _isWheaAvailable = monitor.IsAvailable;
+                OnPropertyChanged(nameof(IsWheaVisible));
+                OnPropertyChanged(nameof(IsAnyReadoutVisible));
                 WheaText = monitor.Total.ToString();
                 HasWheaErrors = monitor.Total > 0;
                 WheaToolTip = monitor.BuildToolTip(Localization.Loc.Language == Localization.AppLanguage.Turkish);
@@ -500,12 +503,24 @@ namespace ZenTimings.ViewModels
             set { _memoryPowerText = value; OnPropertyChanged(); }
         }
 
-        private bool _isMemoryPowerVisible;
-        public bool IsMemoryPowerVisible
+        /// <summary>
+        /// The PMICs are reporting power. Kept apart from <see cref="IsMemoryPowerVisible"/> so the
+        /// CSV log still records the wattage when the row is only hidden from the window.
+        /// </summary>
+        private bool _isMemoryPowerAvailable;
+        public bool IsMemoryPowerAvailable
         {
-            get => _isMemoryPowerVisible;
-            set { _isMemoryPowerVisible = value; OnPropertyChanged(); }
+            get => _isMemoryPowerAvailable;
+            set
+            {
+                _isMemoryPowerAvailable = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsMemoryPowerVisible));
+                OnPropertyChanged(nameof(IsAnyReadoutVisible));
+            }
         }
+
+        public bool IsMemoryPowerVisible => _isMemoryPowerAvailable && Settings.ShowDimmPower;
 
         // --- tCCD_L family ---
 
@@ -558,31 +573,60 @@ namespace ZenTimings.ViewModels
             set { _isTccdlVisible = value; OnPropertyChanged(); }
         }
 
-        private bool _isCpuTemperatureVisible;
-        public bool IsCpuTemperatureVisible
+        private bool _isCpuTemperatureAvailable;
+        public bool IsCpuTemperatureAvailable
         {
-            get => _isCpuTemperatureVisible;
+            get => _isCpuTemperatureAvailable;
             set
             {
-                _isCpuTemperatureVisible = value;
+                _isCpuTemperatureAvailable = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(IsAnyTemperatureVisible));
+                OnPropertyChanged(nameof(IsCpuTemperatureVisible));
+                OnPropertyChanged(nameof(IsAnyReadoutVisible));
             }
         }
 
-        private bool _isMemoryTemperatureVisible;
-        public bool IsMemoryTemperatureVisible
+        public bool IsCpuTemperatureVisible => _isCpuTemperatureAvailable && Settings.ShowCpuTemperature;
+
+        private bool _isMemoryTemperatureAvailable;
+        public bool IsMemoryTemperatureAvailable
         {
-            get => _isMemoryTemperatureVisible;
+            get => _isMemoryTemperatureAvailable;
             set
             {
-                _isMemoryTemperatureVisible = value;
+                _isMemoryTemperatureAvailable = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(IsAnyTemperatureVisible));
+                OnPropertyChanged(nameof(IsMemoryTemperatureVisible));
+                OnPropertyChanged(nameof(IsAnyReadoutVisible));
             }
         }
 
-        public bool IsAnyTemperatureVisible => IsCpuTemperatureVisible || IsMemoryTemperatureVisible;
+        public bool IsMemoryTemperatureVisible => _isMemoryTemperatureAvailable && Settings.ShowMemoryTemperature;
+
+        /// <summary>
+        /// Collapses the whole readout row when nothing in it is left to show, so the panel does not
+        /// keep an empty line's worth of padding. Covers DIMM power and WHEA too - they sit on the
+        /// same row, and switching both temperatures off used to take them down with it.
+        /// </summary>
+        public bool IsAnyReadoutVisible =>
+            IsCpuTemperatureVisible || IsMemoryTemperatureVisible || IsMemoryPowerVisible || IsWheaVisible;
+
+        /// <summary>
+        /// Re-evaluates the optional readouts after the Options dialog writes new switches. The
+        /// visibility getters read <see cref="Settings"/> directly, and a plain property on
+        /// AppSettings raises nothing, so the change has to be announced here.
+        /// </summary>
+        public void RefreshReadoutVisibility()
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                OnPropertyChanged(nameof(IsCpuTemperatureVisible));
+                OnPropertyChanged(nameof(IsMemoryTemperatureVisible));
+                OnPropertyChanged(nameof(IsMemoryPowerVisible));
+                OnPropertyChanged(nameof(IsWheaVisible));
+                OnPropertyChanged(nameof(IsAnyReadoutVisible));
+            });
+        }
 
         private string _bclkString = "N/A";
         public string BclkString

@@ -1,3 +1,8 @@
+# v1.41.5 - updated by deadfellow
+
+ - CPU Die temperature, memory temperature, DIMM power and the WHEA error count
+   can each be switched on or off from Options -> Readouts
+
 # v1.41.1 - updated by deadfellow
 
  - Screenshot bug fixes

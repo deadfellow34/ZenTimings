@@ -323,5 +323,22 @@ namespace ZenTimings
 
         /// <summary>How many samples the main-window sparklines keep.</summary>
         public int HistoryLength { get; set; } = 120;
+
+        // --- Optional readouts on the system-info panel ---
+        // Each one only ever hides a row that the hardware is actually reporting; a reading that
+        // is unavailable stays hidden either way. Default on, so existing settings files keep the
+        // panel exactly as it was.
+
+        /// <summary>Show the CPU Die (Tctl/Tdie) temperature.</summary>
+        public bool ShowCpuTemperature { get; set; } = true;
+
+        /// <summary>Show the average DIMM temperature.</summary>
+        public bool ShowMemoryTemperature { get; set; } = true;
+
+        /// <summary>Show the total on-module PMIC power.</summary>
+        public bool ShowDimmPower { get; set; } = true;
+
+        /// <summary>Show the WHEA error count. Off also stops the event-log polling.</summary>
+        public bool ShowWheaCount { get; set; } = true;
     }
 }

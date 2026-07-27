@@ -155,7 +155,7 @@
                              Each readout carries a sparkline of its own recent history and a
                              min/max/avg tooltip. -->
                         <Border Padding="12 0 0 0"
-                                Visibility="{Binding IsAnyTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding IsAnyReadoutVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{loc:Loc Main.CpuDie}"
                                            Padding="0 0 3 5"

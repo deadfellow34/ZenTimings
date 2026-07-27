@@ -57,6 +57,11 @@ namespace ZenTimings.Windows
             checkBoxTrayLiveIcon.IsChecked = appSettings.TrayLiveIcon;
             comboBoxTrayColor.SelectedIndex = (int)appSettings.TrayIconColor;
             checkBoxStartWithWindows.IsChecked = StartupRegistration.IsEnabled();
+
+            checkBoxShowCpuTemp.IsChecked = appSettings.ShowCpuTemperature;
+            checkBoxShowMemTemp.IsChecked = appSettings.ShowMemoryTemperature;
+            checkBoxShowDimmPower.IsChecked = appSettings.ShowDimmPower;
+            checkBoxShowWhea.IsChecked = appSettings.ShowWheaCount;
         }
 
         /// <summary>
@@ -118,9 +123,15 @@ namespace ZenTimings.Windows
             appSettings.TrayLiveIcon = (bool)checkBoxTrayLiveIcon.IsChecked;
             appSettings.TrayIconColor = (TrayColor)Math.Max(0, comboBoxTrayColor.SelectedIndex);
 
+            appSettings.ShowCpuTemperature = (bool)checkBoxShowCpuTemp.IsChecked;
+            appSettings.ShowMemoryTemperature = (bool)checkBoxShowMemTemp.IsChecked;
+            appSettings.ShowDimmPower = (bool)checkBoxShowDimmPower.IsChecked;
+            appSettings.ShowWheaCount = (bool)checkBoxShowWhea.IsChecked;
+
             // Take effect now rather than on the next launch.
             (Application.Current.MainWindow as MainWindow)?.ApplyHotKeySetting();
             (Application.Current.MainWindow as MainWindow)?.ApplyTraySetting();
+            (Application.Current.MainWindow as MainWindow)?.ApplyReadoutSettings();
 
             bool startWithWindows = (bool)checkBoxStartWithWindows.IsChecked;
             if (startWithWindows != StartupRegistration.IsEnabled())

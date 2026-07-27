@@ -81,6 +81,11 @@ namespace ZenTimings.Localization
             // --- Options dialog ---
             { "Opt.Title",              new[] { "Options",              "Seçenekler" } },
             { "Opt.SectionGeneral",     new[] { "General",              "Genel" } },
+            { "Opt.SectionReadouts",    new[] { "Readouts",             "Göstergeler" } },
+            { "Opt.ShowCpuTemp",        new[] { "CPU Die temperature",  "CPU Die sıcaklığı" } },
+            { "Opt.ShowMemTemp",        new[] { "Memory temperature",   "Bellek sıcaklığı" } },
+            { "Opt.ShowDimmPower",      new[] { "DIMM power",           "DIMM gücü" } },
+            { "Opt.ShowWhea",           new[] { "WHEA error count",     "WHEA hata sayısı" } },
             { "Opt.SectionWindow",      new[] { "Window",               "Pencere" } },
             { "Opt.SectionScreenshot",  new[] { "Screenshot",           "Ekran Görüntüsü" } },
             { "Opt.AdvancedMode",       new[] { "Advanced mode",        "Gelişmiş mod" } },

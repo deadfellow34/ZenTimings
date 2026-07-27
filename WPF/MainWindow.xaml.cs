@@ -777,16 +777,16 @@ namespace ZenTimings
                 if (cpuTemp.HasValue && cpuTemp.Value > 0 && cpuTemp.Value < 150)
                 {
                     mainViewModel.UpdateCpuTemperature(cpuTemp.Value);
-                    mainViewModel.IsCpuTemperatureVisible = true;
+                    mainViewModel.IsCpuTemperatureAvailable = true;
                 }
                 else
                 {
-                    mainViewModel.IsCpuTemperatureVisible = false;
+                    mainViewModel.IsCpuTemperatureAvailable = false;
                 }
             }
             catch
             {
-                mainViewModel.IsCpuTemperatureVisible = false;
+                mainViewModel.IsCpuTemperatureAvailable = false;
             }
 
             // Memory temperature - DDR5 on-module thermal sensors (SPD hub); one entry per populated
@@ -835,27 +835,27 @@ namespace ZenTimings
                 if (samples.Count > 0)
                 {
                     mainViewModel.UpdateMemoryTemperatures(samples);
-                    mainViewModel.IsMemoryTemperatureVisible = true;
+                    mainViewModel.IsMemoryTemperatureAvailable = true;
                 }
                 else
                 {
-                    mainViewModel.IsMemoryTemperatureVisible = false;
+                    mainViewModel.IsMemoryTemperatureAvailable = false;
                 }
 
                 if (anyPower)
                 {
                     mainViewModel.MemoryPowerText = $"{totalWatts:F2} W";
-                    mainViewModel.IsMemoryPowerVisible = true;
+                    mainViewModel.IsMemoryPowerAvailable = true;
                 }
                 else
                 {
-                    mainViewModel.IsMemoryPowerVisible = false;
+                    mainViewModel.IsMemoryPowerAvailable = false;
                 }
             }
             catch
             {
-                mainViewModel.IsMemoryTemperatureVisible = false;
-                mainViewModel.IsMemoryPowerVisible = false;
+                mainViewModel.IsMemoryTemperatureAvailable = false;
+                mainViewModel.IsMemoryPowerAvailable = false;
             }
 
             // Base clock (BCLK)
@@ -896,6 +896,11 @@ namespace ZenTimings
         /// </remarks>
         private void RefreshWheaCount()
         {
+            // Switched off in Options: skip the query entirely rather than read a counter nothing
+            // displays. lastWheaPoll is left alone, so re-enabling picks it up on the next tick.
+            if (!settings.ShowWheaCount)
+                return;
+
             if ((DateTime.Now - lastWheaPoll).TotalSeconds < 30)
                 return;
 
@@ -1130,7 +1135,7 @@ namespace ZenTimings
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     TelemetryLogger.Num(mainViewModel.CpuTemperature, "0.0"),
                     TelemetryLogger.Num(mainViewModel.HottestDimmTemperature, "0.0"),
-                    mainViewModel.IsMemoryPowerVisible
+                    mainViewModel.IsMemoryPowerAvailable
                         ? mainViewModel.MemoryPowerText.Replace(" W", "")
                         : "",
                     TelemetryLogger.Num(mainViewModel.MemoryFrequency, "0"),
@@ -1794,6 +1799,12 @@ namespace ZenTimings
             bool minimizedToTray = WindowState == WindowState.Minimized && settings.MinimizeToTray;
             _notifyIcon.Visible = minimizedToTray || settings.TrayLiveIcon;
         }
+
+        /// <summary>
+        /// Applies the readout on/off switches immediately (called from Options on Apply), so the
+        /// rows appear and disappear without a restart.
+        /// </summary>
+        public void ApplyReadoutSettings() => mainViewModel?.RefreshReadoutVisibility();
 
         /// <summary>Applies the tray live-icon setting immediately (called from Options on Apply).</summary>
         public void ApplyTraySetting()
