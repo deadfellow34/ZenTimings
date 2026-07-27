@@ -84,22 +84,28 @@ namespace ZenTimings
                 affinityHeld = true;
                 previousAffinity = SetThreadAffinityMask(GetCurrentThread(), (UIntPtr)1);
 
+                // A pass has to walk at least one hop per cache line, or a buffer larger than
+                // HopsPerPass x 64 B is never fully visited: everything above ~305 MiB used to
+                // measure the same working set, so the 512 and 1024 MB choices reported a smaller
+                // footprint than asked for - and therefore a better latency than the label implies.
+                int hops = Math.Max(HopsPerPass, lines);
+
                 // Pull the whole buffer through the caches once so the timed passes are not paying
                 // for first-touch page faults.
-                Chase(chain, HopsPerPass / 5);
+                Chase(chain, lines);
 
                 var samples = new double[Passes];
                 for (int pass = 0; pass < Passes; pass++)
                 {
                     var watch = Stopwatch.StartNew();
-                    int landed = Chase(chain, HopsPerPass);
+                    int landed = Chase(chain, hops);
                     watch.Stop();
 
                     // Keeps the JIT from deciding the whole loop is dead code.
                     if (landed < 0)
                         throw new InvalidOperationException();
 
-                    double ns = watch.Elapsed.TotalMilliseconds * 1000000.0 / HopsPerPass;
+                    double ns = watch.Elapsed.TotalMilliseconds * 1000000.0 / hops;
                     samples[pass] = ns;
 
                     if (progress != null)

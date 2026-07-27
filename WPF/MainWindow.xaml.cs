@@ -1681,11 +1681,25 @@ namespace ZenTimings
             }
         }
 
+        /// <summary>
+        /// True while a window that consumes the live hardware feed is still open. Refresh must not
+        /// pause for those: the Telemetry window folds every tick into its own min/max/average, so a
+        /// frozen feed keeps counting and quietly drags the average toward the last sample read.
+        /// </summary>
+        private bool HasLiveDependentWindow()
+        {
+            return (siWnd != null && siWnd.IsLoaded)
+                || (telemetryWnd != null && telemetryWnd.IsLoaded)
+                || (ocToolsWnd != null && ocToolsWnd.IsLoaded)
+                || (latencyWnd != null && latencyWnd.IsLoaded)
+                || (ocProfilesWnd != null && ocProfilesWnd.IsLoaded);
+        }
+
         private void AdonisWindow_StateChanged(object sender, EventArgs e)
         {
             // Normally refresh is paused while minimized to save resources. But the live-value tray
             // icon needs fresh temperatures to draw, so keep refreshing when it is enabled.
-            if (WindowState == WindowState.Minimized && (siWnd == null || !siWnd.IsLoaded))
+            if (WindowState == WindowState.Minimized && !HasLiveDependentWindow())
             {
                 if (!settings.TrayLiveIcon)
                     StopAutoRefresh();

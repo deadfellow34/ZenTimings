@@ -23,7 +23,12 @@ namespace ZenTimings.Windows
         {
             InitializeComponent();
             SystemInfo si = CpuSingleton.Instance.systemInfo;
-            AodData aodData = CpuSingleton.Instance.info.aod.Table.Data;
+            // Platforms without an AOD table throw somewhere along this chain, and this line runs
+            // before the first try block - an unguarded throw here takes the window down on a menu
+            // click. The consumer below already treats a null table as "no AOD data".
+            AodData aodData = null;
+            try { aodData = CpuSingleton.Instance.info.aod.Table.Data; }
+            catch { /* no AOD table on this platform */ }
             Type type = si.GetType();
             PropertyInfo[] properties = type.GetProperties();
             List<GridItem> items;

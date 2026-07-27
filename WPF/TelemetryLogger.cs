@@ -40,7 +40,13 @@ namespace ZenTimings
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
 
-                _writer = new StreamWriter(path, false, new UTF8Encoding(false));
+                // WriteThrough: a plain Flush() only reaches the OS cache, which a hard lock-up -
+                // the exact failure this log exists to capture - discards along with the rows
+                // around the freeze. Going through to the device per row is what makes it true.
+                _writer = new StreamWriter(
+                    new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read, 4096,
+                        FileOptions.WriteThrough),
+                    new UTF8Encoding(false));
                 _columnCount = headers.Count;
                 FilePath = path;
                 RowsWritten = 0;

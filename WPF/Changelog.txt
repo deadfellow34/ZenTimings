@@ -5,6 +5,16 @@
    logging is now "Start / Stop CSV Logging"
  - Fixed ProcDqsOdt showing the ProcDqOdt value on DDR5 APU boards
 
+ Bug fixes
+ - Memory Benchmark: a buffer larger than ~305 MiB was never fully walked, so the
+   512 and 1024 MB runs measured a smaller working set than asked for and
+   reported a better latency than the label implied
+ - CSV logging now writes through to the device, so a hard lock-up keeps the rows
+   around the freeze instead of losing them with the OS cache
+ - Telemetry window no longer folds a frozen reading into its min/max/average
+   while the main window is minimized
+ - System Info no longer risks taking the app down on platforms with no AOD table
+
 # v1.40 - updated by deadfellow
 
  Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on
