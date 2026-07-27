@@ -93,18 +93,6 @@
                         <MenuItem x:Name="OcProfilesMenu" Header="{loc:Loc Menu.OcProfiles}" />
                     </Menu>
 
-                    <!-- In the free space of the menu strip, not in the panel below: that corner
-                         already belongs to the vendor logo on boards that have one, and two badges
-                         fighting over it is what pushed the layout around on ROG boards. -->
-                    <TextBlock
-                        Grid.Column="0"
-                        Text="updated by deadfellow"
-                        Foreground="#3DE86A"
-                        FontSize="11"
-                        VerticalAlignment="Center"
-                        HorizontalAlignment="Right"
-                        Padding="0 0 10 0"
-                        IsHitTestVisible="False" />
                     <Button Grid.Column="1"
                             Width="20"
                             Height="16"
