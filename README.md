@@ -1,4 +1,6 @@
-# ZenTimings
+# ZenTimings / Hobby Fork
+
+tCCDL, WR/WR2 Tested on only a handful of systems, so it may not work on every motherboard/CPU, and it won't be actively maintained.
 
 ![ZenTimings](preview.png "ZenTimings")
 
