@@ -1,3 +1,7 @@
+# v1.42.6
+
+ - tCCD_L, tCCD_L_WR and tCCD_L_WR2 now come from the APOB instead of the UMC registers
+
 # v1.42
 
  - Fixed tCCD_L readout on some MSI boards / AGESA versions

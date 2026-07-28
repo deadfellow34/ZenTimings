@@ -927,11 +927,9 @@ namespace ZenTimings
             });
         }
 
-        /// <summary>
-        /// Reads tCCD_L and tCCD_L_WR2 from the UMC registers, tCCD_L_WR from the APOB.
-        /// Values outside a plausible range are treated as "not available" rather than displayed,
-        /// because the encoding was derived empirically and may not hold on every AGESA.
-        /// </summary>
+        // All three come from the APOB; the UMC registers are only a starting point and a hint.
+        // Values outside a plausible range are dropped rather than displayed - the encoding was
+        // derived empirically and may not hold on every AGESA.
         private void ReadTccdl()
         {
             if (!mainViewModel.IsTccdlVisible)
@@ -948,14 +946,13 @@ namespace ZenTimings
                 mainViewModel.TccdlValue = (tccdl >= 8 && tccdl <= 36) ? tccdl : 0;
                 mainViewModel.TccdlWr2Value = (tccdlWr2 >= 8 && tccdlWr2 <= 70) ? tccdlWr2 : 0;
 
-                // The APOB run carries all three. Some boards never program 0x50198 from the BIOS
-                // setting, so prefer the run where it is found - where the register is right, the
-                // two agree anyway.
-                uint apobTccdl, apobWr;
-                if (TryReadTccdlRunFromApob(mainViewModel.TccdlWr2Value, out apobTccdl, out apobWr))
+                // The APOB carries all three and follows the BIOS setting; the registers do not.
+                uint apobTccdl, apobWr, apobWr2;
+                if (TryReadTccdlRunFromApob(mainViewModel.TccdlWr2Value, out apobTccdl, out apobWr, out apobWr2))
                 {
                     mainViewModel.TccdlValue = apobTccdl;
                     mainViewModel.TccdlWrValue = apobWr;
+                    mainViewModel.TccdlWr2Value = apobWr2;
                 }
                 else
                 {
@@ -971,27 +968,18 @@ namespace ZenTimings
             }
         }
 
-        /// <summary>Marks the per-channel frequency record the tCCD_L run belongs to.</summary>
+        // Start of the per-channel frequency record, and the distance from it to the run.
         private const uint ApobRecordMarker0 = 0x5000;
         private const uint ApobRecordMarker1 = 0x00C3;
-
-        /// <summary>Distance from the marker to the first value of the run, in elements.</summary>
         private const int ApobTripleOffset = 9;
 
-        /// <summary>
-        /// The whole [tCCD_L, tCCD_L_WR, tCCD_L_WR2] run from the APOB. The marker pair appears once
-        /// per channel and the run sits a fixed distance behind it - that held across an AGESA
-        /// update which moved the record's contents by 24 bytes, and unlike the timings around the
-        /// run the markers are not something a BIOS can change. tCCD_L_WR2 from the UMC is used to
-        /// confirm the hit rather than to find it.
-        /// </summary>
-        private bool TryReadTccdlRunFromApob(uint tccdlWr2, out uint tccdl, out uint tccdlWr)
+        // [tCCD_L, tCCD_L_WR, tCCD_L_WR2] from the APOB. 0x50198 reads as a constant on Zen4 and
+        // 0x502E0 looks like a later AGESA addition, so the register only goes in as a hint.
+        private bool TryReadTccdlRunFromApob(uint wr2Hint, out uint tccdl, out uint tccdlWr, out uint tccdlWr2)
         {
             tccdl = 0;
             tccdlWr = 0;
-
-            if (tccdlWr2 == 0)
-                return false;
+            tccdlWr2 = 0;
 
             var apob = cpu?.info.apob;
             if (apob == null || !apob.IsAvailable)
@@ -1001,22 +989,77 @@ namespace ZenTimings
             if (ext == null)
                 return false;
 
-            // Zen5 packs the fields as uint16, Zen4 as uint32.
-            foreach (int width in new[] { 2, 4 })
+            // Zen5 packs the fields as uint16, Zen4 as uint32. The hint-free pass covers boards
+            // where 0x502E0 itself is wrong.
+            foreach (uint hint in new[] { wr2Hint, 0u })
             {
-                if (TryMarkerScan(ext, width, tccdlWr2, out tccdl, out tccdlWr))
-                    return true;
+                foreach (int width in new[] { 2, 4 })
+                {
+                    if (TryMarkerScan(ext, width, hint, out tccdl, out tccdlWr, out tccdlWr2))
+                        return true;
+                }
+
+                foreach (int width in new[] { 2, 4 })
+                {
+                    if (TryValueScan(ext, width, hint, out tccdl, out tccdlWr, out tccdlWr2))
+                        return true;
+                }
+
+                if (wr2Hint == 0)
+                    break;
             }
 
             return false;
         }
 
-        private static bool TryMarkerScan(byte[] ext, int width, uint tccdlWr2, out uint tccdl, out uint tccdlWr)
+        // Same run without the marker, which only exists on Zen5: an 8 sits in front of it and a
+        // zero five elements past it. A nearby run of defaults shares the tCCD_L_WR2 - the zero is
+        // what tells the two apart.
+        private static bool TryValueScan(byte[] ext, int width, uint wr2Hint, out uint tccdl, out uint tccdlWr, out uint tccdlWr2)
         {
             tccdl = 0;
             tccdlWr = 0;
+            tccdlWr2 = 0;
 
-            uint? first = null, middle = null;
+            uint? first = null, middle = null, third = null;
+
+            for (var i = width; i + 6 * width <= ext.Length; i += width)
+            {
+                if (ReadField(ext, i - width, width) != 8) continue;
+                if (ReadField(ext, i + 5 * width, width) != 0) continue;
+
+                uint a = ReadField(ext, i, width);
+                uint b = ReadField(ext, i + width, width);
+                uint c = ReadField(ext, i + 2 * width, width);
+
+                if (wr2Hint != 0 && c != wr2Hint) continue;
+                if (a < 4 || a > 128 || c < 4 || c > 128) continue;
+                if (b < c || b > 8 * c) continue;
+
+                if (first.HasValue && (first.Value != a || middle.Value != b || third.Value != c))
+                    return false;
+
+                first = a;
+                middle = b;
+                third = c;
+            }
+
+            if (!first.HasValue)
+                return false;
+
+            tccdl = first.Value;
+            tccdlWr = middle.Value;
+            tccdlWr2 = third.Value;
+            return true;
+        }
+
+        private static bool TryMarkerScan(byte[] ext, int width, uint wr2Hint, out uint tccdl, out uint tccdlWr, out uint tccdlWr2)
+        {
+            tccdl = 0;
+            tccdlWr = 0;
+            tccdlWr2 = 0;
+
+            uint? first = null, middle = null, third = null;
             int last = (ApobTripleOffset + 3) * width;
 
             for (var i = 0; i + last <= ext.Length; i += width)
@@ -1025,20 +1068,23 @@ namespace ZenTimings
                 if (ReadField(ext, i + width, width) != ApobRecordMarker1) continue;
 
                 int run = i + ApobTripleOffset * width;
-                if (ReadField(ext, run + 2 * width, width) != tccdlWr2) continue;
 
                 uint a = ReadField(ext, run, width);
                 uint b = ReadField(ext, run + width, width);
+                uint c = ReadField(ext, run + 2 * width, width);
 
-                if (a < 8 || a > 36) continue;
-                if (b < tccdlWr2 || b > 4 * tccdlWr2) continue;
+                // The APOB stores raw nCK, so the register's ceiling of 36 does not apply.
+                if (wr2Hint != 0 && c != wr2Hint) continue;
+                if (a < 4 || a > 128 || c < 4 || c > 128) continue;
+                if (b < c || b > 8 * c) continue;
 
-                // One copy per channel; they have to agree or the match is not trustworthy.
-                if (first.HasValue && (first.Value != a || middle.Value != b))
+                // One copy per channel; they have to agree.
+                if (first.HasValue && (first.Value != a || middle.Value != b || third.Value != c))
                     return false;
 
                 first = a;
                 middle = b;
+                third = c;
             }
 
             if (!first.HasValue)
@@ -1046,6 +1092,7 @@ namespace ZenTimings
 
             tccdl = first.Value;
             tccdlWr = middle.Value;
+            tccdlWr2 = third.Value;
             return true;
         }
 
