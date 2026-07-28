@@ -1,3 +1,7 @@
+# v1.42
+
+ - Fixed tCCD_L readout on some MSI boards / AGESA versions
+
 # v1.41.5 - updated by deadfellow
 
  - CPU Die temperature, memory temperature, DIMM power and the WHEA error count

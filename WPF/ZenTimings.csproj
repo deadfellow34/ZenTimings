@@ -42,8 +42,8 @@
   </PropertyGroup>
   <PropertyGroup>
     <VersionMajor>1</VersionMajor>
-    <VersionMinor>41</VersionMinor>
-    <VersionPatch>5</VersionPatch>
+    <VersionMinor>42</VersionMinor>
+    <VersionPatch>0</VersionPatch>
     <VersionBase>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionBase>
   </PropertyGroup>
   <PropertyGroup>

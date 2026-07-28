@@ -947,8 +947,21 @@ namespace ZenTimings
 
                 mainViewModel.TccdlValue = (tccdl >= 8 && tccdl <= 36) ? tccdl : 0;
                 mainViewModel.TccdlWr2Value = (tccdlWr2 >= 8 && tccdlWr2 <= 70) ? tccdlWr2 : 0;
-                mainViewModel.TccdlWrValue = ReadTccdlWrFromApob(
-                    mainViewModel.TccdlValue, mainViewModel.TccdlWr2Value);
+
+                // The APOB run carries all three. Some boards never program 0x50198 from the BIOS
+                // setting, so prefer the run where it is found - where the register is right, the
+                // two agree anyway.
+                uint apobTccdl, apobWr;
+                if (TryReadTccdlRunFromApob(mainViewModel.TccdlWr2Value, out apobTccdl, out apobWr))
+                {
+                    mainViewModel.TccdlValue = apobTccdl;
+                    mainViewModel.TccdlWrValue = apobWr;
+                }
+                else
+                {
+                    mainViewModel.TccdlWrValue = ReadTccdlWrFromApob(
+                        mainViewModel.TccdlValue, mainViewModel.TccdlWr2Value);
+                }
             }
             catch
             {
@@ -958,11 +971,87 @@ namespace ZenTimings
             }
         }
 
+        /// <summary>Marks the per-channel frequency record the tCCD_L run belongs to.</summary>
+        private const uint ApobRecordMarker0 = 0x5000;
+        private const uint ApobRecordMarker1 = 0x00C3;
+
+        /// <summary>Distance from the marker to the first value of the run, in elements.</summary>
+        private const int ApobTripleOffset = 9;
+
         /// <summary>
-        /// tCCD_L_WR from the APOB, or 0 if it cannot be located. AGESA stores the three
-        /// same-bank-group write timings as consecutive nCK values, one copy per channel. The
-        /// search anchors on tCCD_L and tCCD_L_WR2 rather than a fixed offset, so it survives an
-        /// APOB layout change.
+        /// The whole [tCCD_L, tCCD_L_WR, tCCD_L_WR2] run from the APOB. The marker pair appears once
+        /// per channel and the run sits a fixed distance behind it - that held across an AGESA
+        /// update which moved the record's contents by 24 bytes, and unlike the timings around the
+        /// run the markers are not something a BIOS can change. tCCD_L_WR2 from the UMC is used to
+        /// confirm the hit rather than to find it.
+        /// </summary>
+        private bool TryReadTccdlRunFromApob(uint tccdlWr2, out uint tccdl, out uint tccdlWr)
+        {
+            tccdl = 0;
+            tccdlWr = 0;
+
+            if (tccdlWr2 == 0)
+                return false;
+
+            var apob = cpu?.info.apob;
+            if (apob == null || !apob.IsAvailable)
+                return false;
+
+            byte[] ext = apob.RawExtendedData;
+            if (ext == null)
+                return false;
+
+            // Zen5 packs the fields as uint16, Zen4 as uint32.
+            foreach (int width in new[] { 2, 4 })
+            {
+                if (TryMarkerScan(ext, width, tccdlWr2, out tccdl, out tccdlWr))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryMarkerScan(byte[] ext, int width, uint tccdlWr2, out uint tccdl, out uint tccdlWr)
+        {
+            tccdl = 0;
+            tccdlWr = 0;
+
+            uint? first = null, middle = null;
+            int last = (ApobTripleOffset + 3) * width;
+
+            for (var i = 0; i + last <= ext.Length; i += width)
+            {
+                if (ReadField(ext, i, width) != ApobRecordMarker0) continue;
+                if (ReadField(ext, i + width, width) != ApobRecordMarker1) continue;
+
+                int run = i + ApobTripleOffset * width;
+                if (ReadField(ext, run + 2 * width, width) != tccdlWr2) continue;
+
+                uint a = ReadField(ext, run, width);
+                uint b = ReadField(ext, run + width, width);
+
+                if (a < 8 || a > 36) continue;
+                if (b < tccdlWr2 || b > 4 * tccdlWr2) continue;
+
+                // One copy per channel; they have to agree or the match is not trustworthy.
+                if (first.HasValue && (first.Value != a || middle.Value != b))
+                    return false;
+
+                first = a;
+                middle = b;
+            }
+
+            if (!first.HasValue)
+                return false;
+
+            tccdl = first.Value;
+            tccdlWr = middle.Value;
+            return true;
+        }
+
+        /// <summary>
+        /// tCCD_L_WR from the APOB, or 0 if it cannot be located. Fallback for boards where the
+        /// run above is not recognised; anchors on tCCD_L and tCCD_L_WR2 instead.
         /// </summary>
         private uint ReadTccdlWrFromApob(uint tccdl, uint tccdlWr2)
         {
@@ -1015,7 +1104,9 @@ namespace ZenTimings
                 uint candidate = ReadField(ext, i + width, width);
 
                 // JEDEC derives both from the same terms, so tCCD_L_WR is never below tCCD_L_WR2.
-                if (candidate < tccdlWr2)
+                // The upper bound drops runs that match by coincidence - one dump had a 10479 sat
+                // between a valid pair, which used to make the whole search bail out.
+                if (candidate < tccdlWr2 || candidate > 4 * tccdlWr2)
                     continue;
 
                 if (found.HasValue && found.Value != candidate)
