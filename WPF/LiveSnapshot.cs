@@ -113,7 +113,7 @@ namespace ZenTimings
             Put(values, "tWRPRE", t.WRPRE.ToString());
             Put(values, "Nitro", Reflect(t, "Nitro"));
 
-            // Read out of the undecoded UMC registers; 0 means "not available on this platform".
+            // Located in the APOB; 0 means the run was not found on this platform.
             if (vm.TccdlValue > 0) Put(values, "tCCD_L", vm.TccdlValue.ToString());
             if (vm.TccdlWrValue > 0) Put(values, "tCCD_L_WR", vm.TccdlWrValue.ToString());
             if (vm.TccdlWr2Value > 0) Put(values, "tCCD_L_WR2", vm.TccdlWr2Value.ToString());

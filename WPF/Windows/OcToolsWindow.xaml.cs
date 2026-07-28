@@ -415,7 +415,7 @@ namespace ZenTimings.Windows
             new[] { "tRFC",        "RFC" },
             new[] { "tRFC2",       "RFC2" },
             new[] { "tRFCsb",      "RFCsb" },
-            new[] { "tCCD_L",      null },       // filled from the UMC register, not from Timings
+            new[] { "tCCD_L",      null },       // the three below come from the APOB, not from Timings
             new[] { "tCCD_L_WR",   null },
             new[] { "tCCD_L_WR2",  null },
         };
@@ -522,7 +522,7 @@ namespace ZenTimings.Windows
                 return viewModel.TccdlWr2Value > 0 ? (double?)viewModel.TccdlWr2Value : null;
 
             if (ratedName == "tCCD_L_WR")
-                return null; // no register identified for it yet
+                return viewModel.TccdlWrValue > 0 ? (double?)viewModel.TccdlWrValue : null;
 
             if (timingProperty == null || viewModel.Timings == null)
                 return null;

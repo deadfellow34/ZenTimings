@@ -64,11 +64,10 @@ namespace ZenTimings
         private System.Drawing.Icon dynamicTrayIcon;
         private string lastTrayText;
 
-        // tCCD_L family, not decoded by ZenStates-Core. Found by diffing register dumps.
-        //   tCCD_L     = 0x50198[7:3] + 5   (5 bits, so max 36)
-        //   tCCD_L_WR2 = 0x502E0[5:0] + 7
-        // tCCD_L_WR is in no UMC register. Dumps differing only in it are byte-identical across
-        // both channel windows, the AOD table and the SPD. See ReadTccdlWrFromApob.
+        // tCCD_L family, not decoded by ZenStates-Core. All three are read out of the APOB by
+        // TryReadTccdlRunFromApob; these two only seed the search and confirm tCCD_L_WR2.
+        //   tCCD_L     = 0x50198[7:3] + 5   (reads as a constant on Zen4, so never trusted)
+        //   tCCD_L_WR2 = 0x502E0[5:0] + 7   (looks like a later AGESA addition)
         private const uint TccdlRegister = 0x50198u;
         private const uint TccdlWr2Register = 0x502E0u;
 
@@ -940,25 +939,46 @@ namespace ZenTimings
                 uint raw198 = cpu.ReadDword(TccdlRegister);
                 uint raw2E0 = cpu.ReadDword(TccdlWr2Register);
 
-                uint tccdl = ((raw198 >> 3) & 0x1Fu) + 5u;
-                uint tccdlWr2 = (raw2E0 & 0x3Fu) + 7u;
+                // A register that is not there reads back as all ones, which would otherwise decode
+                // to a plausible looking 36 and 70.
+                uint regTccdl = raw198 == uint.MaxValue ? 0 : ((raw198 >> 3) & 0x1Fu) + 5u;
+                uint regWr2 = raw2E0 == uint.MaxValue ? 0 : (raw2E0 & 0x3Fu) + 7u;
 
-                mainViewModel.TccdlValue = (tccdl >= 8 && tccdl <= 36) ? tccdl : 0;
-                mainViewModel.TccdlWr2Value = (tccdlWr2 >= 8 && tccdlWr2 <= 70) ? tccdlWr2 : 0;
+                uint tccdl = (regTccdl >= 8 && regTccdl <= 36) ? regTccdl : 0;
+                uint tccdlWr2 = (regWr2 >= 8 && regWr2 <= 70) ? regWr2 : 0;
+                uint tccdlWr;
 
-                // The APOB carries all three and follows the BIOS setting; the registers do not.
-                uint apobTccdl, apobWr, apobWr2;
-                if (TryReadTccdlRunFromApob(mainViewModel.TccdlWr2Value, out apobTccdl, out apobWr, out apobWr2))
+                // The APOB is read from memory once, when the Cpu is constructed, so scanning it
+                // again cannot produce a different answer. Ticks overlap on their own threads, so
+                // the cache is only written on success and never cleared again.
+                if (!tccdlResolved)
                 {
-                    mainViewModel.TccdlValue = apobTccdl;
-                    mainViewModel.TccdlWrValue = apobWr;
-                    mainViewModel.TccdlWr2Value = apobWr2;
+                    uint a, b, c;
+                    if (TryReadTccdlRunFromApob(tccdlWr2, out a, out b, out c))
+                    {
+                        tccdlApob = a;
+                        tccdlWrApob = b;
+                        tccdlWr2Apob = c;
+                        tccdlResolved = true;
+                    }
+                }
+
+                if (tccdlResolved)
+                {
+                    tccdl = tccdlApob;
+                    tccdlWr = tccdlWrApob;
+                    tccdlWr2 = tccdlWr2Apob;
                 }
                 else
                 {
-                    mainViewModel.TccdlWrValue = ReadTccdlWrFromApob(
-                        mainViewModel.TccdlValue, mainViewModel.TccdlWr2Value);
+                    tccdlWr = ReadTccdlWrFromApob(tccdl, tccdlWr2);
                 }
+
+                // Assigned together: each setter publishes to the UI thread on the spot, so writing
+                // the register value first would put it on screen before the APOB corrects it.
+                mainViewModel.TccdlValue = tccdl;
+                mainViewModel.TccdlWrValue = tccdlWr;
+                mainViewModel.TccdlWr2Value = tccdlWr2;
             }
             catch
             {
@@ -968,10 +988,21 @@ namespace ZenTimings
             }
         }
 
-        // Start of the per-channel frequency record, and the distance from it to the run.
+        // Constant pair that sits a fixed distance in front of the run on Zen5. What the field
+        // itself holds is unknown - it does not move with the memory config.
         private const uint ApobRecordMarker0 = 0x5000;
         private const uint ApobRecordMarker1 = 0x00C3;
         private const int ApobTripleOffset = 9;
+
+        // Bounds for a value read out of the APOB, where the register's 5-bit ceiling of 36 does not
+        // apply. 8 is the JEDEC floor; 64 covers tCCD_L_WR2 even at DDR5-12800, where the JEDEC
+        // minimums are 32 and 64, and nothing ships that fast.
+        private const uint TccdlMin = 8;
+        private const uint TccdlMax = 64;
+        private const uint TccdlWrRatio = 4;
+
+        private volatile bool tccdlResolved;
+        private uint tccdlApob, tccdlWrApob, tccdlWr2Apob;
 
         // [tCCD_L, tCCD_L_WR, tCCD_L_WR2] from the APOB. 0x50198 reads as a constant on Zen4 and
         // 0x502E0 looks like a later AGESA addition, so the register only goes in as a hint.
@@ -1022,6 +1053,7 @@ namespace ZenTimings
             tccdlWr2 = 0;
 
             uint? first = null, middle = null, third = null;
+            int hits = 0;
 
             for (var i = width; i + 6 * width <= ext.Length; i += width)
             {
@@ -1033,8 +1065,8 @@ namespace ZenTimings
                 uint c = ReadField(ext, i + 2 * width, width);
 
                 if (wr2Hint != 0 && c != wr2Hint) continue;
-                if (a < 4 || a > 128 || c < 4 || c > 128) continue;
-                if (b < c || b > 8 * c) continue;
+                if (a < TccdlMin || a > TccdlMax || c < TccdlMin || c > TccdlMax) continue;
+                if (b < c || b > TccdlWrRatio * c) continue;
 
                 if (first.HasValue && (first.Value != a || middle.Value != b || third.Value != c))
                     return false;
@@ -1042,9 +1074,12 @@ namespace ZenTimings
                 first = a;
                 middle = b;
                 third = c;
+                hits++;
             }
 
-            if (!first.HasValue)
+            // One copy per channel, so normally two. A lone hit is only trusted when 0x502E0 vouched
+            // for tCCD_L_WR2, which is what keeps a single-channel board working.
+            if (hits == 0 || (hits < 2 && wr2Hint == 0))
                 return false;
 
             tccdl = first.Value;
@@ -1060,6 +1095,7 @@ namespace ZenTimings
             tccdlWr2 = 0;
 
             uint? first = null, middle = null, third = null;
+            int hits = 0;
             int last = (ApobTripleOffset + 3) * width;
 
             for (var i = 0; i + last <= ext.Length; i += width)
@@ -1075,19 +1111,19 @@ namespace ZenTimings
 
                 // The APOB stores raw nCK, so the register's ceiling of 36 does not apply.
                 if (wr2Hint != 0 && c != wr2Hint) continue;
-                if (a < 4 || a > 128 || c < 4 || c > 128) continue;
-                if (b < c || b > 8 * c) continue;
+                if (a < TccdlMin || a > TccdlMax || c < TccdlMin || c > TccdlMax) continue;
+                if (b < c || b > TccdlWrRatio * c) continue;
 
-                // One copy per channel; they have to agree.
                 if (first.HasValue && (first.Value != a || middle.Value != b || third.Value != c))
                     return false;
 
                 first = a;
                 middle = b;
                 third = c;
+                hits++;
             }
 
-            if (!first.HasValue)
+            if (hits == 0 || (hits < 2 && wr2Hint == 0))
                 return false;
 
             tccdl = first.Value;
@@ -1143,7 +1179,7 @@ namespace ZenTimings
                 uint slot = ReadField(ext, i, width);
                 bool match = strict
                     ? slot == tccdl
-                    : slot >= 8 && slot <= 36 && ReadField(ext, i - width, width) == 8;
+                    : slot >= TccdlMin && slot <= TccdlMax && ReadField(ext, i - width, width) == 8;
 
                 if (!match)
                     continue;
@@ -1153,7 +1189,7 @@ namespace ZenTimings
                 // JEDEC derives both from the same terms, so tCCD_L_WR is never below tCCD_L_WR2.
                 // The upper bound drops runs that match by coincidence - one dump had a 10479 sat
                 // between a valid pair, which used to make the whole search bail out.
-                if (candidate < tccdlWr2 || candidate > 4 * tccdlWr2)
+                if (candidate < tccdlWr2 || candidate > TccdlWrRatio * tccdlWr2)
                     continue;
 
                 if (found.HasValue && found.Value != candidate)
