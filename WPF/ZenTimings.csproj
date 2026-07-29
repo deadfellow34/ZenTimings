@@ -43,7 +43,7 @@
   <PropertyGroup>
     <VersionMajor>1</VersionMajor>
     <VersionMinor>42</VersionMinor>
-    <VersionPatch>7</VersionPatch>
+    <VersionPatch>8</VersionPatch>
     <VersionBase>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionBase>
   </PropertyGroup>
   <PropertyGroup>
@@ -125,6 +125,7 @@
     <Compile Include="TrayIconRenderer.cs" />
     <Compile Include="BenchmarkHistory.cs" />
     <Compile Include="Converters\ClockRatioConverter.cs" />
+    <Compile Include="AodVoltages.cs" />
     <Compile Include="LiveSnapshot.cs" />
     <Compile Include="MemoryBandwidthTest.cs" />
     <Compile Include="MemoryLatencyTest.cs" />
@@ -464,19 +465,6 @@
     <EmbeddedResource Include="Resources\PawnIO\PawnIO_setup.exe" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Loaded by reflection at runtime (see OHWMPlugin), never referenced at compile time.
-         LibreHardwareMonitorLib is preferred; OpenHardwareMonitorLib is the fallback. HidSharp is
-         LibreHardwareMonitorLib's only non-framework dependency (the motherboard path does not call
-         into it, but ship it so no code path can hit a missing-assembly error). -->
-    <Content Include="OpenHardwareMonitorLib.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="LibreHardwareMonitorLib.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="HidSharp.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <!-- Legacy port I/O, loaded by ZenStates-Core by filename. It used to be dropped into the
          output folder by hand, which meant a fresh build produced a folder that would not run. -->
     <Content Include="inpoutx64.dll">

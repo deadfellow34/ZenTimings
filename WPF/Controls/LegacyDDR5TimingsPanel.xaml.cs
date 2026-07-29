@@ -39,7 +39,7 @@ namespace ZenTimings.Controls
                 //textBoxMemVddio.Text = Data.MemVddio.ToString();
                 //textBoxMemVddq.Text = Data.MemVddq.ToString();
                 //textBoxMemVpp.Text = Data.MemVpp.ToString();
-                textBoxApuVddio.Text = Data.ApuVddio.ToString();
+                textBoxApuVddio.Text = AodVoltages.VddioText(cpu, Data);
 
                 try
                 {

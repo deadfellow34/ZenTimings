@@ -810,13 +810,24 @@ namespace ZenTimings.ViewModels
                 }
                 else
                 {
-                    // fallback to AOD table
-                    var aodData = CpuSingleton.Instance.info.aod?.Table?.Data;
-                    if (aodData != null)
+                    // fallback to AOD table, through the located block so a misaligned dictionary
+                    // cannot swap the rails
+                    var located = AodVoltages.Read(CpuSingleton.Instance);
+                    if (located != null)
                     {
-                        SwaAdcV = aodData?.MemVddio != null ? aodData.MemVddio.RawValue / 1000.0f : 0;
-                        SwbAdcV = aodData?.MemVddq != null ? aodData.MemVddq.RawValue / 1000.0f : 0;
-                        VppAdcV = aodData?.MemVpp != null ? aodData.MemVpp.RawValue / 1000.0f : 0;
+                        SwaAdcV = located.Vdd / 1000.0f;
+                        SwbAdcV = located.Vddq / 1000.0f;
+                        VppAdcV = located.Vpp / 1000.0f;
+                    }
+                    else
+                    {
+                        var aodData = CpuSingleton.Instance.info.aod?.Table?.Data;
+                        if (aodData != null)
+                        {
+                            SwaAdcV = aodData?.MemVddio != null ? aodData.MemVddio.RawValue / 1000.0f : 0;
+                            SwbAdcV = aodData?.MemVddq != null ? aodData.MemVddq.RawValue / 1000.0f : 0;
+                            VppAdcV = aodData?.MemVpp != null ? aodData.MemVpp.RawValue / 1000.0f : 0;
+                        }
                     }
                 }
             }

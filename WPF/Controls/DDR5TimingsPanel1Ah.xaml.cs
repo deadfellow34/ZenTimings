@@ -22,7 +22,7 @@ namespace ZenTimings.Controls
             if (Data != null)
             {
                 labelApuVddio.IsEnabled = true;
-                textBoxApuVddio.Text = Data.ApuVddio.ToString();
+                textBoxApuVddio.Text = AodVoltages.VddioText(cpu, Data);
             }
         }
     }
