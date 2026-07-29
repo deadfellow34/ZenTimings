@@ -1,3 +1,9 @@
+# v1.42.8
+
+ - Fixed CPU VDDIO showing 0.0000V or a swapped value on some AGESA versions
+ - MEM VDDQ and MEM VPP no longer swap on boards without PMIC telemetry
+ - Removed unused hardware monitor libraries from the package
+
 # v1.42.7
 
  - Hardened the tCCD_L APOB lookup
