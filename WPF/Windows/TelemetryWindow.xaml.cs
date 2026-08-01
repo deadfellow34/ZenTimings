@@ -377,6 +377,11 @@ namespace ZenTimings.Windows
 
         private void RefreshTimer_Tick(object sender, EventArgs e)
         {
+            // Benchmark mode: this window's own SMBus polling must pause too, or it is the one
+            // source of traffic left running inside the measurement.
+            if (BenchmarkSession.Running)
+                return;
+
             RefreshTelemetry();
         }
 

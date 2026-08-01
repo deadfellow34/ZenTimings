@@ -27,14 +27,13 @@ namespace ZenTimings.ViewModels
 
     /// <summary>
     /// Live temperature of one populated DIMM, kept alive across refreshes so it can accumulate
-    /// min/max/average and a short history for the sparkline. Replacing the objects every tick
-    /// (as this used to) threw those statistics away and rebuilt the whole ItemsControl.
+    /// min/max/average. Replacing the objects every tick (as this used to) threw those statistics
+    /// away and rebuilt the whole ItemsControl.
     /// </summary>
     public class DimmTemperature : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
-        private readonly List<double> _history = new List<double>();
         private double _current;
         private double _min = double.MaxValue;
         private double _max = double.MinValue;
@@ -55,8 +54,6 @@ namespace ZenTimings.ViewModels
             get { return _slot; }
             set { _slot = value; OnPropertyChanged("Slot"); OnPropertyChanged("ToolTipText"); }
         }
-
-        public int HistoryLength { get; set; } = 120;
 
         public double Celsius
         {
@@ -93,12 +90,6 @@ namespace ZenTimings.ViewModels
             }
         }
 
-        /// <summary>A copy, so the render pass can never see the list mid-mutation.</summary>
-        public IEnumerable<double> History
-        {
-            get { return _history.ToArray(); }
-        }
-
         public void Update(double celsius)
         {
             _current = celsius;
@@ -109,15 +100,9 @@ namespace ZenTimings.ViewModels
             _sum += celsius;
             _count++;
 
-            _history.Add(celsius);
-            int limit = HistoryLength > 1 ? HistoryLength : 2;
-            if (_history.Count > limit)
-                _history.RemoveRange(0, _history.Count - limit);
-
             OnPropertyChanged("Celsius");
             OnPropertyChanged("TemperatureText");
             OnPropertyChanged("ToolTipText");
-            OnPropertyChanged("History");
         }
 
         public void ResetStats()
@@ -126,10 +111,8 @@ namespace ZenTimings.ViewModels
             _max = _count == 0 ? double.MinValue : _current;
             _sum = _count == 0 ? 0 : _current;
             _count = _count == 0 ? 0 : 1;
-            _history.Clear();
 
             OnPropertyChanged("ToolTipText");
-            OnPropertyChanged("History");
         }
 
         private void OnPropertyChanged(string name)
@@ -237,7 +220,6 @@ namespace ZenTimings.ViewModels
             set { _cpuTemperatureText = value; OnPropertyChanged(); }
         }
 
-        private readonly List<double> _cpuTemperatureHistory = new List<double>();
         private double _cpuTemperature;
         private double _cpuTemperatureMin = double.MaxValue;
         private double _cpuTemperatureMax = double.MinValue;
@@ -246,8 +228,6 @@ namespace ZenTimings.ViewModels
 
         /// <summary>Live CPU die temperature in °C (0 when unavailable).</summary>
         public double CpuTemperature => _cpuTemperature;
-
-        public IEnumerable<double> CpuTemperatureHistory => _cpuTemperatureHistory.ToArray();
 
         public string CpuTemperatureToolTip
         {
@@ -261,10 +241,7 @@ namespace ZenTimings.ViewModels
             }
         }
 
-        /// <summary>
-        /// Called from the refresh thread. The history list is mutated on the dispatcher only, so a
-        /// render pass reading <see cref="CpuTemperatureHistory"/> can never catch it mid-Add.
-        /// </summary>
+        /// <summary>Called from the refresh thread; the statistics are kept on the dispatcher.</summary>
         public void UpdateCpuTemperature(double celsius)
         {
             Application.Current?.Dispatcher.Invoke(() =>
@@ -277,13 +254,7 @@ namespace ZenTimings.ViewModels
                 _cpuTemperatureSum += celsius;
                 _cpuTemperatureCount++;
 
-                _cpuTemperatureHistory.Add(celsius);
-                int limit = Settings != null && Settings.HistoryLength > 1 ? Settings.HistoryLength : 120;
-                if (_cpuTemperatureHistory.Count > limit)
-                    _cpuTemperatureHistory.RemoveRange(0, _cpuTemperatureHistory.Count - limit);
-
                 OnPropertyChanged(nameof(CpuTemperature));
-                OnPropertyChanged(nameof(CpuTemperatureHistory));
                 OnPropertyChanged(nameof(CpuTemperatureToolTip));
             });
         }
@@ -293,7 +264,7 @@ namespace ZenTimings.ViewModels
 
         /// <summary>
         /// Stable collection of per-DIMM readouts. Entries are updated in place so each one keeps
-        /// its own min/max/average and history.
+        /// its own min/max/average.
         /// </summary>
         public ObservableCollection<DimmTemperature> MemoryTemperatures => _memoryTemperatures;
 
@@ -308,8 +279,6 @@ namespace ZenTimings.ViewModels
 
             Application.Current?.Dispatcher.Invoke(() =>
             {
-                int historyLength = Settings != null && Settings.HistoryLength > 1 ? Settings.HistoryLength : 120;
-
                 for (int i = 0; i < samples.Count; i++)
                 {
                     var sample = samples[i];
@@ -336,7 +305,6 @@ namespace ZenTimings.ViewModels
                         target.Slot = sample.Slot;
                     }
 
-                    target.HistoryLength = historyLength;
                     target.Update(sample.Celsius);
                 }
 
@@ -374,17 +342,10 @@ namespace ZenTimings.ViewModels
                 double average = reporting > 0 ? sum / reporting : 0;
                 _averageDimmTemperature = (float)average;
 
-                if (reporting > 0)
-                {
-                    _memoryTemperatureHistory.Add(average);
-                    if (_memoryTemperatureHistory.Count > historyLength)
-                        _memoryTemperatureHistory.RemoveRange(0, _memoryTemperatureHistory.Count - historyLength);
-                }
-
                 OnPropertyChanged(nameof(HottestDimmTemperature));
                 OnPropertyChanged(nameof(MemoryTemperatureText));
-                OnPropertyChanged(nameof(MemoryTemperatureHistory));
                 OnPropertyChanged(nameof(MemoryTemperatureToolTip));
+                OnDimmReadoutChanged();
             });
         }
 
@@ -437,13 +398,12 @@ namespace ZenTimings.ViewModels
             });
         }
 
-        private readonly List<double> _memoryTemperatureHistory = new List<double>();
         private volatile float _averageDimmTemperature;
 
         /// <summary>
         /// One number for the whole kit: the mean of the populated DIMMs. The main window used to
-        /// draw a value and a sparkline per module, which pushed the readout row - and with it the
-        /// window - wider on every extra DIMM. The per-module detail moved into the tooltip.
+        /// draw a value per module, which pushed the readout row - and with it the window - wider
+        /// on every extra DIMM. The per-module detail moved into the tooltip.
         /// </summary>
         public string MemoryTemperatureText
         {
@@ -454,9 +414,6 @@ namespace ZenTimings.ViewModels
                     : _averageDimmTemperature.ToString("F1") + " °C";
             }
         }
-
-        /// <summary>History of the average, so a single sparkline covers the kit.</summary>
-        public IEnumerable<double> MemoryTemperatureHistory => _memoryTemperatureHistory.ToArray();
 
         /// <summary>One line per DIMM: slot, current reading, and its own min/max/average.</summary>
         public string MemoryTemperatureToolTip
@@ -500,7 +457,15 @@ namespace ZenTimings.ViewModels
         public string MemoryPowerText
         {
             get => _memoryPowerText;
-            set { _memoryPowerText = value; OnPropertyChanged(); }
+            set
+            {
+                if (_memoryPowerText == value)
+                    return;
+
+                _memoryPowerText = value;
+                OnPropertyChanged();
+                OnDimmReadoutChanged();
+            }
         }
 
         /// <summary>
@@ -513,10 +478,14 @@ namespace ZenTimings.ViewModels
             get => _isMemoryPowerAvailable;
             set
             {
+                if (_isMemoryPowerAvailable == value)
+                    return;
+
                 _isMemoryPowerAvailable = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsMemoryPowerVisible));
                 OnPropertyChanged(nameof(IsAnyReadoutVisible));
+                OnDimmReadoutChanged();
             }
         }
 
@@ -548,9 +517,26 @@ namespace ZenTimings.ViewModels
             }
         }
 
-        public string TccdlText => _tccdlValue > 0 ? _tccdlValue.ToString() : "N/A";
+        // Set while the values come from the register fallback rather than a located APOB run;
+        // the "!" tells the user the readout is unverified there.
+        private bool _tccdlFromRegister;
+        public bool TccdlFromRegister
+        {
+            get => _tccdlFromRegister;
+            set
+            {
+                _tccdlFromRegister = value;
+                OnPropertyChanged(nameof(TccdlText));
+                OnPropertyChanged(nameof(TccdlWrText));
+                OnPropertyChanged(nameof(TccdlWr2Text));
+            }
+        }
 
-        public string TccdlWr2Text => _tccdlWr2Value > 0 ? _tccdlWr2Value.ToString() : "N/A";
+        private string TccdlMark => _tccdlFromRegister ? " !" : "";
+
+        public string TccdlText => _tccdlValue > 0 ? _tccdlValue + TccdlMark : "N/A";
+
+        public string TccdlWr2Text => _tccdlWr2Value > 0 ? _tccdlWr2Value + TccdlMark : "N/A";
 
         private uint _tccdlWrValue;
         public uint TccdlWrValue
@@ -564,7 +550,7 @@ namespace ZenTimings.ViewModels
             }
         }
 
-        public string TccdlWrText => _tccdlWrValue > 0 ? _tccdlWrValue.ToString() : "N/A";
+        public string TccdlWrText => _tccdlWrValue > 0 ? _tccdlWrValue + TccdlMark : "N/A";
 
         private bool _isTccdlVisible;
         public bool IsTccdlVisible
@@ -579,6 +565,11 @@ namespace ZenTimings.ViewModels
             get => _isCpuTemperatureAvailable;
             set
             {
+                // Only on a change: the refresh thread writes this every tick and each
+                // notification is a synchronous marshal to the UI thread.
+                if (_isCpuTemperatureAvailable == value)
+                    return;
+
                 _isCpuTemperatureAvailable = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsCpuTemperatureVisible));
@@ -588,20 +579,145 @@ namespace ZenTimings.ViewModels
 
         public bool IsCpuTemperatureVisible => _isCpuTemperatureAvailable && Settings.ShowCpuTemperature;
 
+        private string _iodTemperatureText = "N/A";
+        public string IodTemperatureText
+        {
+            get => _iodTemperatureText;
+            set { _iodTemperatureText = value; OnPropertyChanged(); }
+        }
+
+        private string _iodTemperatureToolTip;
+        public string IodTemperatureToolTip
+        {
+            get => _iodTemperatureToolTip;
+            set { _iodTemperatureToolTip = value; OnPropertyChanged(); }
+        }
+
+        private bool _isIodTemperatureAvailable;
+        public bool IsIodTemperatureAvailable
+        {
+            get => _isIodTemperatureAvailable;
+            set
+            {
+                // Only on a change: the refresh thread writes this every tick, and each
+                // notification is a synchronous marshal to the UI thread. On a platform without
+                // the reading - every Zen 4 board - that would be three of them per tick forever.
+                if (_isIodTemperatureAvailable == value)
+                    return;
+
+                _isIodTemperatureAvailable = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsIodTemperatureVisible));
+                OnPropertyChanged(nameof(IsAnyReadoutVisible));
+            }
+        }
+
+        public bool IsIodTemperatureVisible => _isIodTemperatureAvailable && Settings.ShowIodTemperature;
+
+        /// <summary>
+        /// Both figures, average then hotspot: a single number under an "IOD" label reads as the
+        /// wrong one whichever is chosen, because monitoring tools list the two separately.
+        /// </summary>
+        private float _iodHotspotMin = float.MaxValue;
+        private float _iodHotspotMax = float.MinValue;
+        private double _iodHotspotSum;
+        private int _iodHotspotCount;
+
+        public void UpdateIodTemperature(float average, float hotspot)
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                // Current culture, like every other readout on the row - an invariant decimal point
+                // here would sit next to comma-separated neighbours on a Turkish desktop.
+                IodTemperatureText = string.Format("{0:F1} / {1:F1} °C", average, hotspot);
+
+                if (hotspot < _iodHotspotMin) _iodHotspotMin = hotspot;
+                if (hotspot > _iodHotspotMax) _iodHotspotMax = hotspot;
+                _iodHotspotSum += hotspot;
+                _iodHotspotCount++;
+
+                // Same shape as the CPU and DIMM tooltips: the session's range, not just a
+                // restatement of the two numbers already on screen.
+                IodTemperatureToolTip = string.Format(
+                    "I/O die {0:F1} °C, hotspot {1:F1} °C" + Environment.NewLine +
+                    "Hotspot min {2:F1} / avg {3:F1} / max {4:F1} °C",
+                    average, hotspot, _iodHotspotMin,
+                    _iodHotspotSum / _iodHotspotCount, _iodHotspotMax);
+            });
+        }
+
         private bool _isMemoryTemperatureAvailable;
         public bool IsMemoryTemperatureAvailable
         {
             get => _isMemoryTemperatureAvailable;
             set
             {
+                if (_isMemoryTemperatureAvailable == value)
+                    return;
+
                 _isMemoryTemperatureAvailable = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsMemoryTemperatureVisible));
                 OnPropertyChanged(nameof(IsAnyReadoutVisible));
+                OnDimmReadoutChanged();
             }
         }
 
         public bool IsMemoryTemperatureVisible => _isMemoryTemperatureAvailable && Settings.ShowMemoryTemperature;
+
+        /// <summary>
+        /// Temperature and power in one entry, because they describe the same modules and the
+        /// readouts row is what sets the window width. Whichever half is switched off or
+        /// unavailable simply drops out.
+        /// </summary>
+        public string DimmReadoutText
+        {
+            get
+            {
+                bool temperature = IsMemoryTemperatureVisible;
+                bool power = IsMemoryPowerVisible;
+
+                if (temperature && power)
+                    return MemoryTemperatureText + "  " + MemoryPowerText;
+                if (temperature)
+                    return MemoryTemperatureText;
+
+                return power ? MemoryPowerText : string.Empty;
+            }
+        }
+
+        public string DimmReadoutToolTip
+        {
+            get
+            {
+                string tip = IsMemoryTemperatureVisible ? MemoryTemperatureToolTip : null;
+                if (IsMemoryPowerVisible)
+                {
+                    string power = Localization.Loc.T("Main.DimmPowerTip");
+                    tip = string.IsNullOrEmpty(tip) ? power : tip + Environment.NewLine + power;
+                }
+
+                return tip;
+            }
+        }
+
+        public bool IsDimmReadoutVisible => IsMemoryTemperatureVisible || IsMemoryPowerVisible;
+
+        /// <summary>
+        /// Reserved width for whichever halves are actually on. A single figure keyed to both of
+        /// them would leave about 50px of gap in front of the WHEA label as soon as one is switched
+        /// off - and the window is sized to its content, so that gap is window width.
+        /// </summary>
+        public double DimmReadoutMinWidth =>
+            IsMemoryTemperatureVisible && IsMemoryPowerVisible ? 96 : 50;
+
+        private void OnDimmReadoutChanged()
+        {
+            OnPropertyChanged(nameof(DimmReadoutText));
+            OnPropertyChanged(nameof(DimmReadoutToolTip));
+            OnPropertyChanged(nameof(IsDimmReadoutVisible));
+            OnPropertyChanged(nameof(DimmReadoutMinWidth));
+        }
 
         /// <summary>
         /// Collapses the whole readout row when nothing in it is left to show, so the panel does not
@@ -609,7 +725,8 @@ namespace ZenTimings.ViewModels
         /// same row, and switching both temperatures off used to take them down with it.
         /// </summary>
         public bool IsAnyReadoutVisible =>
-            IsCpuTemperatureVisible || IsMemoryTemperatureVisible || IsMemoryPowerVisible || IsWheaVisible;
+            IsCpuTemperatureVisible || IsIodTemperatureVisible || IsMemoryTemperatureVisible
+            || IsMemoryPowerVisible || IsWheaVisible;
 
         /// <summary>
         /// Re-evaluates the optional readouts after the Options dialog writes new switches. The
@@ -621,10 +738,12 @@ namespace ZenTimings.ViewModels
             Application.Current?.Dispatcher.Invoke(() =>
             {
                 OnPropertyChanged(nameof(IsCpuTemperatureVisible));
+                OnPropertyChanged(nameof(IsIodTemperatureVisible));
                 OnPropertyChanged(nameof(IsMemoryTemperatureVisible));
                 OnPropertyChanged(nameof(IsMemoryPowerVisible));
                 OnPropertyChanged(nameof(IsWheaVisible));
                 OnPropertyChanged(nameof(IsAnyReadoutVisible));
+                OnDimmReadoutChanged();
             });
         }
 
@@ -885,6 +1004,9 @@ namespace ZenTimings.ViewModels
             var properties = type.GetProperties();
             string appVersion = $"{System.Windows.Forms.Application.ProductName} {System.Windows.Forms.Application.ProductVersion}";
 
+            // Same palette as the benchmark export - the two reports come out of one app and used
+            // to look like they came out of two. Print falls back to white, where dark would waste
+            // a cartridge and read worse on paper.
             string html = @"<!DOCTYPE html>
             <html>
             <head>
@@ -892,13 +1014,17 @@ namespace ZenTimings.ViewModels
             <style>
             body {
                 font-family: Segoe UI, Tahoma, sans-serif;
-                background: #f7f9fb;
-                color: #1f2937;
+                background: #141b28;
+                color: #dbe2ee;
+            }
+
+            h1 {
+                color: #eaf0fa;
             }
 
             h2 {
-                color: #2563eb;
-                border-bottom: 2px solid #e5e7eb;
+                color: #7facff;
+                border-bottom: 2px solid #2a3550;
                 padding-bottom: 4px;
             }
 
@@ -906,19 +1032,19 @@ namespace ZenTimings.ViewModels
                 border-collapse: collapse;
                 width: auto;
                 margin-bottom: 20px;
-                background: #ffffff;
+                background: #1c2537;
             }
 
             th, td {
-                border: 1px solid #e5e7eb;
+                border: 1px solid #2a3550;
                 padding: 6px 8px;
                 text-align: center;
                 font-size: 13px;
             }
 
             th {
-                background: #e8f0fe;
-                color: #1d4ed8;
+                background: #223052;
+                color: #a8c4ff;
                 cursor: pointer;
                 user-select: none;
             }
@@ -929,16 +1055,27 @@ namespace ZenTimings.ViewModels
             }
 
             tr.mismatch td {
-                background: #fff1f2;
+                background: #3a2230;
             }
 
             tr.primary td:first-child {
-                color: #0f172a;
+                color: #eaf0fa;
                 font-weight: 700;
             }
 
             tr.secondary td:first-child {
-                color: #475569;
+                color: #8b96aa;
+            }
+
+            @media print {
+                body { background: #fff; color: #1f2937; }
+                h1, tr.primary td:first-child { color: #0f172a; }
+                h2 { color: #2563eb; border-bottom-color: #e5e7eb; }
+                table { background: #fff; }
+                th, td { border-color: #e5e7eb; }
+                th { background: #e8f0fe; color: #1d4ed8; }
+                tr.mismatch td { background: #fff1f2; }
+                tr.secondary td:first-child { color: #475569; }
             }
             </style>
             </head>
@@ -1016,7 +1153,34 @@ namespace ZenTimings.ViewModels
 
                 html += "</tr>";
             }
+
+            // The tCCD_L family lives outside BaseDramTimings (APOB-sourced), so the reflection
+            // loop above never sees it. Not per-DCT - the same value fills every column. Each row
+            // stands on its own value: WR and WR2 are still worth showing when tCCD_L is not.
+            // The cells carry the number alone; the on-screen "!" is a provenance marker, and a
+            // report someone grabs a value out of must not have it glued to the digits.
+            bool anyTccdl = false;
+            foreach (var row in new[]
+                     {
+                         new { Name = "tCCD_L", Value = TccdlValue },
+                         new { Name = "tCCD_L_WR", Value = TccdlWrValue },
+                         new { Name = "tCCD_L_WR2", Value = TccdlWr2Value },
+                     })
+            {
+                if (row.Value == 0)
+                    continue;
+
+                anyTccdl = true;
+                html += $"<tr><td>{row.Name}</td>";
+                foreach (var timing in uniqueTimings)
+                    html += $"<td>{row.Value}</td>";
+                html += "</tr>";
+            }
+
             html += "</table>";
+
+            if (anyTccdl && TccdlFromRegister)
+                html += "<div>tCCD_L values came from the register fallback, not a located APOB run - treat them as unverified.</div>";
 
             // PMT
             html += "<h2>PMT</h2>";
@@ -1097,6 +1261,7 @@ namespace ZenTimings.ViewModels
                 .Property("TotalCapacity", TotalCapacity?.ToString() ?? "Unknown")
                 .Property("ECC", ECC)
                 .Property("tCCD_L", TccdlValue > 0 ? (object)TccdlValue : null)
+                .Property("tCCD_L_WR", TccdlWrValue > 0 ? (object)TccdlWrValue : null)
                 .Property("tCCD_L_WR2", TccdlWr2Value > 0 ? (object)TccdlWr2Value : null)
                 .EndObject();
 

@@ -5,84 +5,49 @@ using System.Windows.Data;
 namespace ZenTimings.Converters
 {
     /// <summary>
-    /// Appends this clock's multiplier to its label: how many times it has to be multiplied before
-    /// all three of MCLK / FCLK / UCLK land on the same number.
+    /// Appends the memory controller ratio to the UCLK label: 1:1 while it runs at the memory
+    /// clock, 1:2 once it drops to half.
     /// </summary>
     /// <remarks>
-    /// That common number is the least common multiple, and dividing it by each clock gives the
-    /// multipliers. 2400 / 1800 / 2400 meet at 7200, so they read 3, 4, 3 - the 1800 needs four
-    /// steps where the 2400s need three. When one clock is a plain division of another the answer
-    /// collapses to the familiar form: 2400 / 1200 / 2400 reads 1, 2, 1, and 4000 / 2000 / 2000
-    /// reads 1, 2, 2.
-    ///
-    /// Working from the LCM rather than from the fastest clock is what lets a ratio like 4:3 be
-    /// stated at all - dividing the fastest by each clock only produces whole numbers when the
-    /// others happen to divide into it exactly.
+    /// Only UCLK against MCLK is stated, because that is the ratio the BIOS actually offers - the
+    /// UCLK DIV1 setting - and the only one that changes memory controller throughput. FCLK is left
+    /// alone: on AM5 it is decoupled and sits around 2000-2200 while MCLK goes past 3000, so the AM4
+    /// habit of chasing 1:1:1 across all three no longer applies and a number next to it would only
+    /// invite the comparison.
     ///
     /// Rides on the label because the value column is fixed width and the panel must not get wider.
     /// The parameter names which of the three the label belongs to.
     /// </remarks>
     public class ClockRatioConverter : IMultiValueConverter
     {
+        /// <summary>Values are MCLK then UCLK; only the UCLK label is ever decorated.</summary>
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
             string label = parameter as string ?? string.Empty;
 
-            if (values == null || values.Length < 3)
+            if (values == null || values.Length < 2)
                 return label;
 
             long mclk = Round(values[0]);
-            long fclk = Round(values[1]);
-            long uclk = Round(values[2]);
+            long uclk = Round(values[1]);
 
-            if (mclk <= 0 || fclk <= 0 || uclk <= 0)
+            if (mclk <= 0 || uclk <= 0)
                 return label;
 
-            long mine;
-            switch (label)
-            {
-                case "MCLK": mine = mclk; break;
-                case "FCLK": mine = fclk; break;
-                case "UCLK": mine = uclk; break;
-                default: return label;
-            }
+            // Only the two ratios the memory controller actually offers, matched within half a
+            // percent rather than exactly: the 66 MHz straps (5867, 6133...) round to numbers
+            // like 1467 : 2933 that share no factor, and an exact reduction would drop the label
+            // exactly where it is most needed. Anything else gets no label at all - an arbitrary
+            // small fraction would look like a mode that does not exist.
+            double measured = (double)uclk / mclk;
 
-            // All three first. This is the case worth showing, because it states the whole setup.
-            long meetingPoint = Lcm(Lcm(mclk, fclk), uclk);
-            if (meetingPoint > 0 && Worst(meetingPoint, mclk, fclk, uclk) <= MaxSteps)
-                return label + "  " + (meetingPoint / mine).ToString(CultureInfo.InvariantCulture);
+            if (Math.Abs(measured - 1.0) < 0.005)
+                return label + "  1:1";
 
-            // FCLK often sits on a value - 2233, 2167 - that shares nothing with the memory clock,
-            // and including it would push the common multiple into the millions. Letting that hide
-            // MCLK and UCLK as well would be throwing away the one ratio that always matters, so
-            // fall back to those two on their own and leave FCLK blank.
-            if (label == "FCLK")
-                return label;
-
-            long pair = Lcm(mclk, uclk);
-            if (pair > 0 && Worst(pair, mclk, uclk) <= MaxSteps)
-                return label + "  " + (pair / mine).ToString(CultureInfo.InvariantCulture);
+            if (Math.Abs(measured - 0.5) < 0.005)
+                return label + "  1:2";
 
             return label;
-        }
-
-        /// <summary>
-        /// A ratio only says something while the numbers stay small. 3000 against 2200 reduces to
-        /// 15 : 11, which is arithmetically true and tells nobody anything.
-        /// </summary>
-        private const long MaxSteps = 8;
-
-        private static long Worst(long meetingPoint, params long[] clocks)
-        {
-            long worst = 0;
-            foreach (long clock in clocks)
-            {
-                long steps = meetingPoint / clock;
-                if (steps > worst)
-                    worst = steps;
-            }
-
-            return worst;
         }
 
         private static long Round(object value)
@@ -93,36 +58,6 @@ namespace ZenTimings.Converters
             if (value is uint) return (uint)value;
 
             return 0;
-        }
-
-        private static long Gcd(long a, long b)
-        {
-            while (b != 0)
-            {
-                long t = b;
-                b = a % b;
-                a = t;
-            }
-
-            return a;
-        }
-
-        /// <summary>Least common multiple, or 0 when it would not fit.</summary>
-        private static long Lcm(long a, long b)
-        {
-            if (a <= 0 || b <= 0)
-                return 0;
-
-            long divisor = Gcd(a, b);
-            if (divisor <= 0)
-                return 0;
-
-            // Coprime clocks multiply out fast; bail rather than overflow.
-            long result = a / divisor;
-            if (result > long.MaxValue / b)
-                return 0;
-
-            return result * b;
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)

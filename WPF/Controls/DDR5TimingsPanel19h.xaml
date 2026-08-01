@@ -253,31 +253,14 @@
 
                 <StackPanel Grid.Column="0">
                     <TextBlock TextAlignment="Right"
-                           IsEnabled="{Binding PowerTable.MCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}">
-                        <TextBlock.Text>
-                            <MultiBinding Converter="{StaticResource ClockRatio}" ConverterParameter="MCLK">
-                                <Binding Path="PowerTable.MCLK" Mode="OneWay" />
-                                <Binding Path="PowerTable.FCLK" Mode="OneWay" />
-                                <Binding Path="PowerTable.UCLK" Mode="OneWay" />
-                            </MultiBinding>
-                        </TextBlock.Text>
-                    </TextBlock>
+                           IsEnabled="{Binding PowerTable.MCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" Text="MCLK" />
                     <TextBlock TextAlignment="Right"
-                           IsEnabled="{Binding PowerTable.FCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}">
-                        <TextBlock.Text>
-                            <MultiBinding Converter="{StaticResource ClockRatio}" ConverterParameter="FCLK">
-                                <Binding Path="PowerTable.MCLK" Mode="OneWay" />
-                                <Binding Path="PowerTable.FCLK" Mode="OneWay" />
-                                <Binding Path="PowerTable.UCLK" Mode="OneWay" />
-                            </MultiBinding>
-                        </TextBlock.Text>
-                    </TextBlock>
+                           IsEnabled="{Binding PowerTable.FCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}" Text="FCLK" />
                     <TextBlock TextAlignment="Right"
                            IsEnabled="{Binding PowerTable.UCLK, Mode=OneWay, Converter={StaticResource FloatToBool}}">
                         <TextBlock.Text>
                             <MultiBinding Converter="{StaticResource ClockRatio}" ConverterParameter="UCLK">
                                 <Binding Path="PowerTable.MCLK" Mode="OneWay" />
-                                <Binding Path="PowerTable.FCLK" Mode="OneWay" />
                                 <Binding Path="PowerTable.UCLK" Mode="OneWay" />
                             </MultiBinding>
                         </TextBlock.Text>

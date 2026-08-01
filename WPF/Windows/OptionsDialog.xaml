@@ -25,11 +25,13 @@
     Style="{DynamicResource WindowStyles}"
     Closing="OptionsWindow_Closing">
 
-    <StackPanel x:Name="OptionWindowContent">
+    <Grid>
+        <!-- The banner sits outside the scrolled content and anchors to the viewport, so it stays
+             at the top of the dialog instead of riding the content out of sight. -->
         <Popup
             x:Name="OptionsPopup"
             Panel.ZIndex="100"
-            PlacementTarget="{Binding ElementName=OptionWindowContent}"
+            PlacementTarget="{Binding ElementName=OptionsScroll}"
             VerticalAlignment="Center"
             Placement="Relative"
             HorizontalAlignment="Center"
@@ -47,6 +49,11 @@
                 Padding="10" Opacity="0.95"
                 Text="{loc:Loc Opt.SettingsSaved}" />
         </Popup>
+
+    <!-- Scrolls because the readouts section can push the dialog past a short screen, and
+         NoResize would leave no way to reach the buttons. Capped in the code-behind. -->
+    <ScrollViewer x:Name="OptionsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel x:Name="OptionWindowContent">
 
         <!--TabControl
             HorizontalAlignment="Left"
@@ -281,8 +288,8 @@
             </Grid>
         </StackPanel>
 
-        <!-- The four optional readouts on the main window's info panel. Each switch only hides a
-             row; nothing here makes an unsupported reading appear. -->
+        <!-- The optional readouts on the main window's info panel. Each switch only hides a row;
+             nothing here makes an unsupported reading appear. -->
         <StackPanel
             Orientation="Vertical"
             Margin="6">
@@ -301,6 +308,7 @@
                     <RowDefinition Height="auto" />
                     <RowDefinition Height="auto" />
                     <RowDefinition Height="auto" />
+                    <RowDefinition Height="auto" />
                 </Grid.RowDefinitions>
 
                 <ToggleButton
@@ -313,9 +321,18 @@
                     Content="{loc:Loc Opt.ShowCpuTemp}" />
 
                 <ToggleButton
-                    x:Name="checkBoxShowMemTemp"
+                    x:Name="checkBoxShowIodTemp"
                     Grid.Column="0"
                     Grid.Row="1"
+                    Grid.ColumnSpan="3"
+                    Margin="0 5 5 5"
+                    Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
+                    Content="{loc:Loc Opt.ShowIodTemp}" />
+
+                <ToggleButton
+                    x:Name="checkBoxShowMemTemp"
+                    Grid.Column="0"
+                    Grid.Row="2"
                     Grid.ColumnSpan="3"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
@@ -324,7 +341,7 @@
                 <ToggleButton
                     x:Name="checkBoxShowDimmPower"
                     Grid.Column="0"
-                    Grid.Row="2"
+                    Grid.Row="3"
                     Grid.ColumnSpan="3"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
@@ -333,7 +350,7 @@
                 <ToggleButton
                     x:Name="checkBoxShowWhea"
                     Grid.Column="0"
-                    Grid.Row="3"
+                    Grid.Row="4"
                     Grid.ColumnSpan="3"
                     Margin="0 5 5 5"
                     Style="{DynamicResource {x:Static adonisUi:Styles.ToggleSwitch}}"
@@ -558,4 +575,6 @@
                     Click="ButtonSettingsCancel_Click" />
         </Grid>
     </StackPanel>
+    </ScrollViewer>
+    </Grid>
 </local:ThemedAdonisWindow>

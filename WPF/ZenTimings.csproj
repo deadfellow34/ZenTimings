@@ -42,9 +42,13 @@
   </PropertyGroup>
   <PropertyGroup>
     <VersionMajor>1</VersionMajor>
-    <VersionMinor>42</VersionMinor>
-    <VersionPatch>8</VersionPatch>
+    <VersionMinor>43</VersionMinor>
+    <VersionPatch>0</VersionPatch>
     <VersionBase>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionBase>
+  </PropertyGroup>
+  <PropertyGroup>
+    <!-- The latency benchmark chases raw pointers; nothing else uses unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -114,7 +118,6 @@
       <Link>Common\UpdaterPersistenceProvider.cs</Link>
     </Compile>
     <Compile Include="AgesaHelper.cs" />
-    <Compile Include="Controls\Sparkline.cs" />
     <Compile Include="HotKeyManager.cs" />
     <Compile Include="JsonWriter.cs" />
     <Compile Include="Localization\Loc.cs" />
@@ -123,7 +126,13 @@
     <Compile Include="TelemetryLogger.cs" />
     <Compile Include="TimingTooltips.cs" />
     <Compile Include="TrayIconRenderer.cs" />
+    <Compile Include="BenchmarkExport.cs" />
+    <Compile Include="IodTemperature.cs" />
     <Compile Include="BenchmarkHistory.cs" />
+    <Compile Include="BenchmarkNative.cs" />
+    <Compile Include="BenchmarkSession.cs" />
+    <Compile Include="VisualCapture.cs" />
+    <Compile Include="Windows\AllDimmsCapture.cs" />
     <Compile Include="Converters\ClockRatioConverter.cs" />
     <Compile Include="AodVoltages.cs" />
     <Compile Include="LiveSnapshot.cs" />
@@ -178,6 +187,9 @@
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="Windows\DriverUpdateWindow.xaml.cs">
       <DependentUpon>DriverUpdateWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AllDimmsWindow.xaml.cs">
+      <DependentUpon>AllDimmsWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Windows\MemoryLatencyWindow.xaml.cs">
       <DependentUpon>MemoryLatencyWindow.xaml</DependentUpon>
@@ -255,6 +267,10 @@
       <SubType>Code</SubType>
     </Compile>
     <Page Include="Windows\OcToolsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AllDimmsWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

@@ -132,6 +132,7 @@ namespace ZenTimings
 
             // 0 means "not readable on this platform" - do not record it as a real value.
             if (vm.TccdlValue > 0) profile.Add("tCCD_L", vm.TccdlValue);
+            if (vm.TccdlWrValue > 0) profile.Add("tCCD_L_WR", vm.TccdlWrValue);
             if (vm.TccdlWr2Value > 0) profile.Add("tCCD_L_WR2", vm.TccdlWr2Value);
 
             var powerTable = vm.PowerTable;

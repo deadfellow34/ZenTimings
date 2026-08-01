@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -131,7 +131,9 @@ namespace ZenTimings.Windows
             }
             finally
             {
-                if (timerWasRunning)
+                // Not while a benchmark is measuring - it stopped the timer on purpose and
+                // restarts it itself when it finishes.
+                if (timerWasRunning && !BenchmarkSession.Running)
                     refreshTimer.Start();
             }
 

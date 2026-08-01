@@ -19,7 +19,8 @@ namespace ZenTimings.Windows
             public string Value { get; set; }
         }
 
-        public SystemInfoWindow(MemoryConfig mc, Resistances? mcConfig, List<AsusSensorInfo> asusSensors)
+        public SystemInfoWindow(MemoryConfig mc, Resistances? mcConfig, List<AsusSensorInfo> asusSensors,
+            uint tccdl = 0, uint tccdlWr = 0, uint tccdlWr2 = 0)
         {
             InitializeComponent();
             SystemInfo si = CpuSingleton.Instance.systemInfo;
@@ -77,6 +78,18 @@ namespace ZenTimings.Windows
                         Values = uniqueTimings.Select(t => t.Value[property.Name].ToString()).ToArray()
                     })
                     .ToList();
+
+                // The tCCD_L family lives in the APOB, so the reflection above never sees it. One
+                // copy per channel and they have to agree, so every DCT column gets the same value.
+                if (tccdl > 0)
+                {
+                    int columns = uniqueTimings.Count;
+                    rows.Add(new { PropertyName = "tCCD_L", Values = Enumerable.Repeat(tccdl.ToString(), columns).ToArray() });
+                    if (tccdlWr > 0)
+                        rows.Add(new { PropertyName = "tCCD_L_WR", Values = Enumerable.Repeat(tccdlWr.ToString(), columns).ToArray() });
+                    if (tccdlWr2 > 0)
+                        rows.Add(new { PropertyName = "tCCD_L_WR2", Values = Enumerable.Repeat(tccdlWr2.ToString(), columns).ToArray() });
+                }
 
                 MemCfgGrid.ItemsSource = rows;
 
@@ -142,6 +155,24 @@ namespace ZenTimings.Windows
                         items.Add(new GridItem() { Name = property.Name, Value = $"{value}" });
                     }
 
+                    // The dictionary offsets behind AodData are off by one slot on some AGESA
+                    // versions. When the located block is available its values win, so this table
+                    // matches the main window. See AodVoltages.
+                    AodVoltages located = AodVoltages.Read(CpuSingleton.Instance);
+                    if (located != null)
+                    {
+                        foreach (GridItem item in items)
+                        {
+                            switch (item.Name)
+                            {
+                                case "MemVddio": item.Value = AodVoltages.Text(located.Vdd); break;
+                                case "MemVddq": item.Value = AodVoltages.Text(located.Vddq); break;
+                                case "MemVpp": item.Value = AodVoltages.Text(located.Vpp); break;
+                                case "ApuVddio": item.Value = AodVoltages.Text(located.Apu); break;
+                            }
+                        }
+                    }
+
                     MemControllerGrid.ItemsSource = items;
                 }
                 catch
@@ -163,6 +194,17 @@ namespace ZenTimings.Windows
                         object value = property.GetValue(apobData);
                         items.Add(new GridItem() { Name = property.Name, Value = $"{value}" });
                     }
+
+                    // Located in the raw extended block by MainWindow, not decoded by the core.
+                    if (tccdl > 0)
+                    {
+                        items.Add(new GridItem() { Name = "tCCD_L", Value = tccdl.ToString() });
+                        if (tccdlWr > 0)
+                            items.Add(new GridItem() { Name = "tCCD_L_WR", Value = tccdlWr.ToString() });
+                        if (tccdlWr2 > 0)
+                            items.Add(new GridItem() { Name = "tCCD_L_WR2", Value = tccdlWr2.ToString() });
+                    }
+
                     ApobTableGrid.ItemsSource = items;
                 }
                 catch

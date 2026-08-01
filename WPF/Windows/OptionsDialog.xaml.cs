@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
@@ -35,6 +35,10 @@ namespace ZenTimings.Windows
 
             InitializeComponent();
 
+            // SizeToContent asks for the full list; on a short screen that puts Apply and Close
+            // off the bottom, and the window cannot be resized. The ScrollViewer takes over here.
+            MaxHeight = SystemParameters.WorkArea.Height;
+
             checkBoxAutoRefresh.IsChecked = appSettings.AutoRefresh;
             checkBoxAutoRefresh.IsEnabled = appSettings.AdvancedMode;
             checkBoxAdvancedMode.IsChecked = appSettings.AdvancedMode;
@@ -59,6 +63,7 @@ namespace ZenTimings.Windows
             checkBoxStartWithWindows.IsChecked = StartupRegistration.IsEnabled();
 
             checkBoxShowCpuTemp.IsChecked = appSettings.ShowCpuTemperature;
+            checkBoxShowIodTemp.IsChecked = appSettings.ShowIodTemperature;
             checkBoxShowMemTemp.IsChecked = appSettings.ShowMemoryTemperature;
             checkBoxShowDimmPower.IsChecked = appSettings.ShowDimmPower;
             checkBoxShowWhea.IsChecked = appSettings.ShowWheaCount;
@@ -124,6 +129,7 @@ namespace ZenTimings.Windows
             appSettings.TrayIconColor = (TrayColor)Math.Max(0, comboBoxTrayColor.SelectedIndex);
 
             appSettings.ShowCpuTemperature = (bool)checkBoxShowCpuTemp.IsChecked;
+            appSettings.ShowIodTemperature = (bool)checkBoxShowIodTemp.IsChecked;
             appSettings.ShowMemoryTemperature = (bool)checkBoxShowMemTemp.IsChecked;
             appSettings.ShowDimmPower = (bool)checkBoxShowDimmPower.IsChecked;
             appSettings.ShowWheaCount = (bool)checkBoxShowWhea.IsChecked;
@@ -172,7 +178,9 @@ namespace ZenTimings.Windows
 
             if (checkBoxAutoRefresh.IsEnabled)
             {
-                if (appSettings.AutoRefresh && !timerInstance.IsEnabled)
+                // Never resume polling while a benchmark is measuring - its finish path restarts
+                // the timer itself, and reads the settings saved here when it does.
+                if (appSettings.AutoRefresh && !timerInstance.IsEnabled && !BenchmarkSession.Running)
                     timerInstance.Start();
                 else if (!appSettings.AutoRefresh && timerInstance.IsEnabled)
                     timerInstance.Stop();
@@ -185,10 +193,12 @@ namespace ZenTimings.Windows
             {
                 buttonSettingsRestart.Visibility = Visibility.Visible;
                 appSettings.Save();
-                OptionsPopupText.Text = "Some settings will be applied on next launch.";
+                OptionsPopupText.Text = Loc.T("Opt.RestartNeeded");
             }
 
-            OptionsPopup.Width = OptionWindowContent.ActualWidth;
+            // The viewport, not the scrolled content: the content is narrower once a scrollbar
+            // appears, and the banner is meant to span the dialog.
+            OptionsPopup.Width = OptionsScroll.ActualWidth;
             OptionsPopup.IsOpen = true;
         }
 

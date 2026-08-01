@@ -7,11 +7,13 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
+    xmlns:loc="clr-namespace:ZenTimings.Localization"
     mc:Ignorable="d"
-    Title="Memory Benchmark"
+    Title="{loc:Loc Bench.Title}"
     Width="430"
+    MinWidth="430"
     SizeToContent="Height"
-    ResizeMode="NoResize"
+    ResizeMode="CanResize"
     WindowStartupLocation="CenterOwner"
     BorderThickness="1"
     UseLayoutRounding="True"
@@ -19,9 +21,12 @@
     Icon="/ZenTimings;component/Resources/new-icon/16.png"
     Closing="Window_Closing">
 
+    <!-- Scrolls because the history list makes this taller than a 768-line screen, and the
+         window is capped to the work area in the code-behind. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel>
         <GroupBox
-            Header="Result"
+            Header="{loc:Loc Bench.Result}"
             adonisExtensions:LayerExtension.Layer="3"
             Padding="10 5">
             <StackPanel>
@@ -31,9 +36,11 @@
                            HorizontalAlignment="Center"
                            Foreground="{DynamicResource AccentTextColor}" />
                 <TextBlock x:Name="SpreadText"
-                           Text="Not measured yet"
+                           Text="{loc:Loc Bench.NotMeasured}"
                            FontSize="11"
-                           HorizontalAlignment="Center"
+                           HorizontalAlignment="Stretch"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
                            Opacity="0.7"
                            Margin="0 2 0 0" />
 
@@ -42,20 +49,27 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                        <TextBlock Text="Read" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Bench.Read}" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
                         <TextBlock x:Name="ReadText" Text="-" FontSize="15" HorizontalAlignment="Center"
                                    Foreground="{DynamicResource AccentTextColor}" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                        <TextBlock Text="Write" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Bench.Write}" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
                         <TextBlock x:Name="WriteText" Text="-" FontSize="15" HorizontalAlignment="Center"
                                    Foreground="{DynamicResource AccentTextColor}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                        <TextBlock Text="Copy" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Bench.Copy}" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
                         <TextBlock x:Name="CopyText" Text="-" FontSize="15" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource AccentTextColor}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" HorizontalAlignment="Center"
+                                ToolTip="{loc:Loc Bench.RandomTip}">
+                        <TextBlock Text="{loc:Loc Bench.Random}" FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="RandomText" Text="-" FontSize="15" HorizontalAlignment="Center"
                                    Foreground="{DynamicResource AccentTextColor}" />
                     </StackPanel>
                 </Grid>
@@ -69,21 +83,21 @@
         </GroupBox>
 
         <GroupBox
-            Header="Theoretical ceiling"
+            Header="{loc:Loc Bench.Ceiling}"
             adonisExtensions:LayerExtension.Layer="3"
             Padding="10 5">
             <StackPanel x:Name="CeilingPanel" />
         </GroupBox>
 
         <GroupBox
-            Header="Configuration at the time of the run"
+            Header="{loc:Loc Bench.Context}"
             adonisExtensions:LayerExtension.Layer="3"
             Padding="10 5">
             <StackPanel x:Name="ContextPanel" />
         </GroupBox>
 
         <GroupBox
-            Header="Test"
+            Header="{loc:Loc Bench.Test}"
             adonisExtensions:LayerExtension.Layer="3"
             Padding="10 5">
             <Grid>
@@ -93,11 +107,14 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0" Text="Buffer" VerticalAlignment="Center" Margin="0 0 8 0" />
+                <TextBlock Grid.Column="0" Text="{loc:Loc Bench.Buffer}" VerticalAlignment="Center" Margin="0 0 8 0" />
+                <!-- Measures to its widest item rather than a fixed width: the cache-bound tag is
+                     appended at runtime and is longer in some languages, and a clipped warning is
+                     the one thing this list must not produce. -->
                 <ComboBox x:Name="BufferSize"
                           Grid.Column="1"
                           HorizontalAlignment="Left"
-                          Width="120"
+                          MinWidth="120"
                           VerticalAlignment="Center">
                     <ComboBoxItem Content="128 MB" Tag="128" />
                     <ComboBoxItem Content="256 MB" Tag="256" IsSelected="True" />
@@ -107,7 +124,7 @@
 
                 <Button x:Name="RunButton"
                         Grid.Column="2"
-                        Content="Run"
+                        Content="{loc:Loc Bench.Run}"
                         Width="90"
                         Click="RunButton_Click"
                         Style="{DynamicResource {x:Static adonisUI:Styles.AccentButton}}"
@@ -115,11 +132,37 @@
             </Grid>
         </GroupBox>
 
+        <GroupBox
+            Header="{loc:Loc Bench.History}"
+            adonisExtensions:LayerExtension.Layer="3"
+            Padding="10 5">
+            <StackPanel>
+                <ListBox x:Name="HistoryList"
+                         MaxHeight="200"
+                         FontSize="11"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0 6 0 0">
+                    <Button x:Name="ExportButton"
+                            Content="{loc:Loc Bench.ExportHtml}"
+                            Width="100"
+                            Margin="0 0 6 0"
+                            IsEnabled="False"
+                            Click="ExportButton_Click" />
+                    <Button x:Name="PinButton"
+                            Content="{loc:Loc Bench.Pin}"
+                            Width="120"
+                            IsEnabled="False"
+                            Click="PinButton_Click" />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
         <TextBlock x:Name="HintText"
                    FontSize="11"
                    Opacity="0.7"
                    TextWrapping="Wrap"
                    Margin="12 6 12 10"
-                   Text="Close other load first. Reads a few ns above AIDA64, which maps its buffer with large pages - use it to compare runs on this machine, not against other tools." />
+                   Text="{loc:Loc Bench.Hint}" />
     </StackPanel>
+    </ScrollViewer>
 </local:ThemedAdonisWindow>

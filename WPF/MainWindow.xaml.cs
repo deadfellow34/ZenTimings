@@ -207,6 +207,11 @@ namespace ZenTimings
                     PowerCfgTimer.Interval = TimeSpan.FromMilliseconds(settings.AutoRefreshInterval);
                     PowerCfgTimer.Tick += PowerCfgTimer_Tick;
 
+                    // The benchmark asks for polling to stop and start again; this window is the
+                    // one that knows the rules around it.
+                    BenchmarkSession.Suspend = StopAutoRefresh;
+                    BenchmarkSession.Resume = ResumeAfterBenchmark;
+
                     SplashWindow.Loading("Reading power table");
                     if (!WaitForPowerTable())
                     {
@@ -349,6 +354,10 @@ namespace ZenTimings
 
         private void Cleanup()
         {
+            // A measurement in flight pins a core and holds native buffers; ask it to stop before
+            // the driver and the plugins go away underneath it.
+            BenchmarkSession.RequestCancel();
+
             foreach (IPlugin plugin in plugins)
                 plugin?.Close();
 
@@ -433,6 +442,10 @@ namespace ZenTimings
                     comboBoxPartNumber.SelectedIndex = 0;
                     comboBoxPartNumber.SelectionChanged += ComboBoxPartNumber_SelectionChanged;
                 }
+
+                // Only worth a button when there is more than one DIMM to lay out.
+                if (cpu.memoryConfig.Modules.Count > 1)
+                    buttonAllDimms.Visibility = Visibility.Visible;
             }
         }
 
@@ -749,6 +762,11 @@ namespace ZenTimings
 
         private void StartAutoRefresh()
         {
+            // The benchmark stopped the timer on purpose - a restore/minimize of this window must
+            // not resume the SMU/SMBus polling into its measurement. The benchmark restarts it.
+            if (BenchmarkSession.Running)
+                return;
+
             if (settings.AutoRefresh && settings.AdvancedMode && !PowerCfgTimer.IsEnabled)
             {
                 PowerCfgTimer.Interval = TimeSpan.FromMilliseconds(settings.AutoRefreshInterval);
@@ -762,8 +780,157 @@ namespace ZenTimings
                 PowerCfgTimer.Stop();
         }
 
-        // Reads live CPU Die/memory temperatures and the base clock (BCLK), pushing them to the view model.
-        // Safe to call from a background thread: MainViewModel marshals PropertyChanged to the UI thread.
+        /// <summary>
+        /// Polling after a benchmark finishes. Not simply StartAutoRefresh: the same rule the
+        /// state handler applies has to hold here too, or a run that ends while the window is
+        /// minimized leaves the SMU and SMBus being polled with nothing on screen to show for it.
+        /// </summary>
+        private void ResumeAfterBenchmark()
+        {
+            if (WindowState == WindowState.Minimized && !HasLiveDependentWindow() && !settings.TrayLiveIcon)
+                return;
+
+            StartAutoRefresh();
+        }
+
+        private Windows.AllDimmsWindow allDimmsWnd;
+
+        /// <summary>Every populated channel as the app's own timings panel, side by side.</summary>
+        private void ButtonAllDimms_Click(object sender, RoutedEventArgs e)
+        {
+            // Reading every channel's registers mid-benchmark would put SMN traffic straight into
+            // the measurement - the one thing benchmark mode exists to prevent. Reported the same
+            // way as any other failure here, because a tooltip is not visible at click time.
+            if (BenchmarkSession.Running)
+            {
+                HandleError(Localization.Loc.T("AllDimms.Busy"));
+                return;
+            }
+
+            // One window, like every other tool window here.
+            if (allDimmsWnd != null && allDimmsWnd.IsLoaded)
+            {
+                allDimmsWnd.Activate();
+                return;
+            }
+
+            // The PMIC rails belong to the module, not the channel, and the view model only ever
+            // holds the selected one's. Saved here rather than inside the capture so the row the
+            // main window shows is put back exactly as it was, even for a module that reports none.
+            var savedRails = new[] { mainViewModel.SwaAdcV, mainViewModel.SwbAdcV, mainViewModel.VppAdcV };
+            Action restoreRails = () =>
+            {
+                mainViewModel.SwaAdcV = savedRails[0];
+                mainViewModel.SwbAdcV = savedRails[1];
+                mainViewModel.VppAdcV = savedRails[2];
+            };
+
+            try
+            {
+                var captured = Windows.AllDimmsCapture.Run(
+                    timingsPanel,
+                    cpu.memoryConfig.Modules,
+                    ReadTimings,
+                    () => mainViewModel.Timings,
+                    timings => mainViewModel.Timings = timings,
+                    PointAtModuleRails,
+                    restoreRails,
+                    DescribeModule);
+
+                if (captured.Channels.Count == 0)
+                    return;
+
+                allDimmsWnd = new Windows.AllDimmsWindow(captured.Channels, captured.Highlights) { Owner = this };
+                allDimmsWnd.Closed += (s2, e2) => allDimmsWnd = null;
+                allDimmsWnd.Show();
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex.Message);
+            }
+            finally
+            {
+                // The capture restores them itself on its way out; this is the safety net for a
+                // throw before it got that far.
+                restoreRails();
+            }
+        }
+
+        /// <summary>
+        /// The module's own SPD line for its column heading. Same fields, same labels and same
+        /// order as the card the Telemetry window draws, so the two read alike.
+        /// </summary>
+        /// <remarks>
+        /// The PMIC's I2C address is deliberately left out. It identifies the chip on the bus, not
+        /// the part - it says nothing about the module and only reads as noise next to decoded
+        /// names like "SK Hynix A-Die". The Telemetry card leaves it out for the same reason.
+        /// </remarks>
+        private string DescribeModule(int index)
+        {
+            var spd = cpu.memoryConfig?.SpdInfo?.Values.ElementAtOrDefault(index);
+            if (spd == null)
+                return null;
+
+            var parts = new List<string>();
+
+            if (spd.PmicData != null && spd.PmicData.IsValid)
+            {
+                parts.Add($"PMIC {spd.PmicData.VendorName} rev " +
+                    $"{spd.PmicData.RevisionMajor}.{spd.PmicData.RevisionMinor}");
+            }
+
+            if (spd.RanksPerChannel > 0)
+                parts.Add($"Rank {spd.RanksPerChannel}R");
+
+            if (!string.IsNullOrEmpty(spd.DramManufacturer))
+            {
+                string die = VendorUtils.GetDramDieName(spd.DramManufacturer, spd.DramStepping);
+                parts.Add(("DRAM " + spd.DramManufacturer + " " + die).Trim());
+            }
+
+            // Rounded, not truncated: a 24 GB module reports 24576 MB, but a kit that reports
+            // 24000 would otherwise print 23.
+            if (spd.TotalCapacityMB > 0)
+                parts.Add($"{(spd.TotalCapacityMB + 512) / 1024} GB");
+
+            return parts.Count > 0 ? string.Join("   ", parts) : null;
+        }
+
+        /// <summary>
+        /// Shows one module's own PMIC rails and returns them. Zero where the module reports none,
+        /// so a column never inherits its neighbour's voltage - the PmicData setter keeps the last
+        /// good reading on purpose, which is right for a live row and wrong for a per-module shot.
+        /// </summary>
+        private float[] PointAtModuleRails(int index)
+        {
+            Ddr5PmicData pmic = null;
+            try
+            {
+                pmic = cpu.memoryConfig?.SpdInfo?.Values.ElementAtOrDefault(index)?.PmicData;
+            }
+            catch
+            {
+                // No SPD hub on this platform.
+            }
+
+            float vdd = pmic != null && pmic.SwaAdcMv > 0 ? pmic.SwaAdcMv / 1000.0f : 0;
+            float vddq = pmic != null && pmic.SwbAdcMv > 0 ? pmic.SwbAdcMv / 1000.0f : 0;
+            float vpp = pmic != null && pmic.SwcAdcMv > 0 ? pmic.SwcAdcMv / 1000.0f : 0;
+
+            mainViewModel.SwaAdcV = vdd;
+            mainViewModel.SwbAdcV = vddq;
+            mainViewModel.VppAdcV = vpp;
+
+            return new[] { vdd, vddq, vpp };
+        }
+
+        /// <summary>Consecutive ticks the I/O die reading may be missing before the row goes.</summary>
+        private const int IodMissesBeforeHiding = 3;
+
+        // Interlocked: UpdateLiveReadouts runs on the UI thread at startup and on the refresh
+        // worker afterwards, so a plain ++ could lose the increment that hides the row.
+        private int iodMisses;
+
         private void UpdateLiveReadouts()
         {
             if (mainViewModel == null || cpu == null)
@@ -786,6 +953,31 @@ namespace ZenTimings
             catch
             {
                 mainViewModel.IsCpuTemperatureAvailable = false;
+            }
+
+            // I/O die temperature, straight out of the power table the tick already refreshed.
+            try
+            {
+                float iodAverage, iodHotspot;
+                if (IodTemperature.TryRead(cpu, out iodAverage, out iodHotspot))
+                {
+                    mainViewModel.UpdateIodTemperature(iodAverage, iodHotspot);
+                    mainViewModel.IsIodTemperatureAvailable = true;
+                    Interlocked.Exchange(ref iodMisses, 0);
+                }
+                else if (Volatile.Read(ref iodMisses) <= IodMissesBeforeHiding)
+                {
+                    // A tick that lands mid-refresh reads nothing; hiding the row on the first
+                    // one would make the readouts row - and with it the window - twitch. The
+                    // counter stops at the threshold, so a platform without the reading at all
+                    // is not counting ticks for the life of the process.
+                    if (Interlocked.Increment(ref iodMisses) > IodMissesBeforeHiding)
+                        mainViewModel.IsIodTemperatureAvailable = false;
+                }
+            }
+            catch
+            {
+                mainViewModel.IsIodTemperatureAvailable = false;
             }
 
             // Memory temperature - DDR5 on-module thermal sensors (SPD hub); one entry per populated
@@ -975,7 +1167,9 @@ namespace ZenTimings
                 }
 
                 // Assigned together: each setter publishes to the UI thread on the spot, so writing
-                // the register value first would put it on screen before the APOB corrects it.
+                // the register value first would put it on screen before the APOB corrects it. The
+                // flag goes first so a fallback value never renders without its marker.
+                mainViewModel.TccdlFromRegister = !tccdlResolved;
                 mainViewModel.TccdlValue = tccdl;
                 mainViewModel.TccdlWrValue = tccdlWr;
                 mainViewModel.TccdlWr2Value = tccdlWr2;
@@ -1742,24 +1936,17 @@ namespace ZenTimings
         {
             try
             {
-                PresentationSource presentationSource = PresentationSource.FromVisual(this);
-                if (presentationSource == null || ActualWidth < 1 || ActualHeight < 1)
+                if (PresentationSource.FromVisual(this) == null)
                     return null;
 
-                // The visual tree is in device-independent units; scale to real pixels so the shot
-                // matches what PrintWindow produces on the same display.
-                double scaleX = presentationSource.CompositionTarget.TransformToDevice.M11;
-                double scaleY = presentationSource.CompositionTarget.TransformToDevice.M22;
-
-                var target = new RenderTargetBitmap(
-                    (int)Math.Round(ActualWidth * scaleX), (int)Math.Round(ActualHeight * scaleY),
-                    96 * scaleX, 96 * scaleY, PixelFormats.Pbgra32);
-                target.Render(this);
+                var rendered = VisualCapture.Render(this);
+                if (rendered == null)
+                    return null;
 
                 using (var buffer = new MemoryStream())
                 {
                     var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(target));
+                    encoder.Frames.Add(BitmapFrame.Create(rendered));
                     encoder.Save(buffer);
                     buffer.Position = 0;
 
@@ -2143,7 +2330,12 @@ namespace ZenTimings
                 sysInfoWindowWidth = settings.SysInfoWindowWidth;
             }
 
-            siWnd = new SystemInfoWindow(cpu.memoryConfig, BMC?.Config, AsusWmi?.sensors)
+            // Only when the run was located in the APOB - the register fallback has no place in
+            // tables labelled as APOB data.
+            siWnd = new SystemInfoWindow(cpu.memoryConfig, BMC?.Config, AsusWmi?.sensors,
+                tccdlResolved ? tccdlApob : 0,
+                tccdlResolved ? tccdlWrApob : 0,
+                tccdlResolved ? tccdlWr2Apob : 0)
             {
                 Width = sysInfoWindowWidth,
                 Height = sysInfoWindowHeight,

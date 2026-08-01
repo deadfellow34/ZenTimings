@@ -45,9 +45,13 @@ namespace ZenTimings.Localization
             { "Menu.Changelog",         new[] { "Changelog",            "Değişiklik Günlüğü" } },
 
             // --- Main window ---
-            { "Main.CpuDie",            new[] { "CPU Die:",             "CPU Die:" } },
-            { "Main.Memory",            new[] { "Memory:",              "Bellek:" } },
-            { "Main.DimmPower",         new[] { "DIMM Power:",          "DIMM Gücü:" } },
+            // Short labels: the readouts row drives the window width, and the units in the values
+            // already say what each one is.
+            { "Main.CpuDie",            new[] { "CPU",                  "CPU" } },
+            { "Main.IodHotspot",        new[] { "IOD",                  "IOD" } },
+            { "Main.Memory",            new[] { "DIMM",                 "DIMM" } },
+            { "Main.DimmPowerTip",      new[] { "Sum of the on-module PMIC power readings",
+                                                "Modül üzerindeki PMIC güç okumalarının toplamı" } },
 
             // --- OC Tools window ---
             { "Oc.Title",               new[] { "OC Tools",             "OC Araçları" } },
@@ -75,7 +79,15 @@ namespace ZenTimings.Localization
             { "Opt.TrayLiveIcon",       new[] { "Live value on tray icon",        "Tepsi ikonunda canlı değer" } },
             { "Opt.TrayIconColor",      new[] { "Tray icon colour",     "Tepsi ikonu rengi" } },
             { "Tray.CopiedToClipboard", new[] { "Copied to clipboard",  "Panoya kopyalandı" } },
-            { "Main.Whea",              new[] { "WHEA:",                "WHEA:" } },
+            { "Main.Whea",              new[] { "WHEA",                 "WHEA" } },
+
+            // --- All DIMMs window ---
+            { "AllDimms.Title",         new[] { "All DIMMs",            "Tüm DIMM'ler" } },
+            { "AllDimms.Button",        new[] { "All",                  "Tümü" } },
+            { "AllDimms.Tip",           new[] { "All channels side by side",
+                                                "Tüm kanallar yan yana" } },
+            { "AllDimms.Busy",          new[] { "Not while a benchmark is running",
+                                                "Benchmark çalışırken kullanılamaz" } },
             { "Opt.StartWithWindows",   new[] { "Start with Windows",   "Windows ile başlat" } },
 
             // --- Options dialog ---
@@ -83,6 +95,7 @@ namespace ZenTimings.Localization
             { "Opt.SectionGeneral",     new[] { "General",              "Genel" } },
             { "Opt.SectionReadouts",    new[] { "Readouts",             "Göstergeler" } },
             { "Opt.ShowCpuTemp",        new[] { "CPU Die temperature",  "CPU Die sıcaklığı" } },
+            { "Opt.ShowIodTemp",        new[] { "IOD temperature",      "IOD sıcaklığı" } },
             { "Opt.ShowMemTemp",        new[] { "Memory temperature",   "Bellek sıcaklığı" } },
             { "Opt.ShowDimmPower",      new[] { "DIMM power",           "DIMM gücü" } },
             { "Opt.ShowWhea",           new[] { "WHEA error count",     "WHEA hata sayısı" } },
@@ -99,9 +112,72 @@ namespace ZenTimings.Localization
             { "Opt.ScreenshotMode",     new[] { "Mode",                 "Mod" } },
             { "Opt.ScreenshotLocation", new[] { "Location",             "Konum" } },
             { "Opt.SettingsSaved",      new[] { "Settings Saved.",      "Ayarlar kaydedildi." } },
+            { "Opt.RestartNeeded",      new[] { "Some settings will be applied on next launch.",
+                                                "Bazı ayarlar bir sonraki açılışta uygulanacak." } },
             { "Common.Browse",          new[] { "Browse...",            "Gözat..." } },
             { "Common.Apply",           new[] { "Apply",                "Uygula" } },
             { "Common.Close",           new[] { "Close",                "Kapat" } },
+
+            // --- Memory benchmark ---
+            // The exported HTML stays English on purpose: it is meant to be shared and read by
+            // people who do not run this copy of the app.
+            { "Bench.Title",            new[] { "Memory Benchmark",     "Bellek Testi" } },
+            { "Bench.Result",           new[] { "Result",               "Sonuç" } },
+            { "Bench.NotMeasured",      new[] { "Not measured yet",     "Henüz ölçülmedi" } },
+            { "Bench.Read",             new[] { "Read",                 "Okuma" } },
+            { "Bench.Write",            new[] { "Write",                "Yazma" } },
+            { "Bench.Copy",             new[] { "Copy",                 "Kopyalama" } },
+            { "Bench.Random",           new[] { "Random",               "Rastgele" } },
+            { "Bench.RandomTip",        new[] { "Independent random line fetches, many in flight - governed by the bank-cycle timings (tRAS, tRC, tRRD, tFAW), not by one access's latency.",
+                                                "Aynı anda çok sayıda bağımsız rastgele satır okuması - tek bir erişimin gecikmesi değil, bank döngüsü zamanlamaları (tRAS, tRC, tRRD, tFAW) belirler." } },
+            { "Bench.Ceiling",          new[] { "Theoretical ceiling",  "Teorik tavan" } },
+            { "Bench.Context",          new[] { "Configuration at the time of the run",
+                                                "Ölçüm anındaki yapılandırma" } },
+            { "Bench.Test",             new[] { "Test",                 "Test" } },
+            { "Bench.Buffer",           new[] { "Buffer",               "Tampon" } },
+            { "Bench.Run",              new[] { "Run",                  "Çalıştır" } },
+            { "Bench.History",          new[] { "History",              "Geçmiş" } },
+            { "Bench.ExportHtml",       new[] { "Export HTML",          "HTML aktar" } },
+            { "Bench.Pin",              new[] { "Pin as baseline",      "Referans olarak sabitle" } },
+            { "Bench.Hint",             new[] { "App polling pauses during a run. Large pages are used automatically when the account holds the 'Lock pages in memory' right; the result line says which mode measured. Compare runs on this machine, not against other tools.",
+                                                "Ölçüm sırasında uygulamanın yoklaması durur. Hesapta 'Sayfaları bellekte kilitle' yetkisi varsa büyük sayfalar kendiliğinden kullanılır; hangi modda ölçüldüğü sonuç satırında yazar. Sonuçları başka araçlarla değil, bu makinedeki diğer ölçümlerle karşılaştırın." } },
+
+            { "Bench.Busy",             new[] { "A benchmark is still finishing - try again in a moment.",
+                                                "Önceki ölçüm hâlâ tamamlanıyor - birazdan tekrar deneyin." } },
+            { "Bench.MeasuringLatency", new[] { "Measuring latency",    "Gecikme ölçülüyor" } },
+            { "Bench.MeasuringBandwidth", new[] { "Measuring bandwidth", "Bant genişliği ölçülüyor" } },
+            { "Bench.Failed",           new[] { "Failed",               "Başarısız" } },
+            { "Bench.FailedWith",       new[] { "Failed: ",             "Başarısız: " } },
+            { "Bench.FailedToStart",    new[] { "Failed to start.",     "Başlatılamadı." } },
+            { "Bench.FailedToStartWith", new[] { "Failed to start: ",   "Başlatılamadı: " } },
+
+            // "min of {0} slices, spread {1} ns, {2} MB, {3} pages"
+            { "Bench.Detail",           new[] { "min of {0} slices, spread {1} ns, {2} MB, {3} pages",
+                                                "{0} dilimin en düşüğü, yayılım {1} ns, {2} MB, {3} sayfa" } },
+            { "Bench.PagesLarge",       new[] { "large",                "büyük" } },
+            { "Bench.Pages4K",          new[] { "4K",                   "4K" } },
+            { "Bench.CacheBound",       new[] { "cache-bound",          "önbellek sınırlı" } },
+            { "Bench.NoisyLong",        new[] { "noisy run, close other load and repeat",
+                                                "gürültülü ölçüm, diğer yükleri kapatıp tekrarlayın" } },
+            { "Bench.Noisy",            new[] { "noisy",                "gürültülü" } },
+            { "Bench.NotComparable",    new[] { "not comparable",       "karşılaştırılamaz" } },
+
+            { "Bench.DramBus",          new[] { "DRAM bus",             "DRAM veri yolu" } },
+            { "Bench.FabricRead",       new[] { "Fabric read",          "Fabric okuma" } },
+            { "Bench.FabricWrite",      new[] { "Fabric write",         "Fabric yazma" } },
+            { "Bench.Unavailable",      new[] { "Unavailable",          "Kullanılamıyor" } },
+            { "Bench.NoClocks",         new[] { "clocks not reported",  "saatler bildirilmiyor" } },
+
+            { "Bench.ErrRange",         new[] { "Buffer size out of range.",
+                                                "Tampon boyutu aralık dışında." } },
+            { "Bench.ErrMemory",        new[] { "Not enough free memory for that buffer size.",
+                                                "Bu tampon boyutu için yeterli boş bellek yok." } },
+            { "Bench.ErrCancelled",     new[] { "Cancelled.",           "İptal edildi." } },
+
+            { "Bench.ExportOk",         new[] { "HTML file exported successfully!",
+                                                "HTML dosyası başarıyla dışa aktarıldı!" } },
+            { "Bench.ExportFailed",     new[] { "Could not write the file: ",
+                                                "Dosya yazılamadı: " } },
         };
 
         public static string T(string key)

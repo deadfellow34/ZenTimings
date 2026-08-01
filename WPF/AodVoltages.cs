@@ -87,14 +87,22 @@ namespace ZenTimings
         {
             // Once the block is located its slot is the answer, zero included - a zero there means
             // AGESA never wrote the value, not that the rail is at 0 V. Same for the fallback.
-            // Formatting matches Voltage.ToString in the core, which pins en-US.
             if (v != null)
-                return v.Vddio > 0
-                    ? string.Format(CultureInfo.GetCultureInfo("en-US"), "{0:F4}V", v.Vddio / 1000.0)
-                    : "N/A";
+                return Text(v.Vddio);
 
             return fallback?.ApuVddio != null && fallback.ApuVddio.RawValue > 0
                 ? fallback.ApuVddio.ToString()
+                : "N/A";
+        }
+
+        /// <summary>
+        /// Millivolts the way the core's Voltage.ToString writes them - en-US, four decimals - so
+        /// a rail read out of the table and one read off a panel cannot look different.
+        /// </summary>
+        public static string Text(uint millivolts)
+        {
+            return millivolts > 0
+                ? string.Format(CultureInfo.GetCultureInfo("en-US"), "{0:F4}V", millivolts / 1000.0)
                 : "N/A";
         }
     }

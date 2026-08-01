@@ -321,9 +321,6 @@ namespace ZenTimings
 
         public bool StartWithWindows { get; set; }
 
-        /// <summary>How many samples the main-window sparklines keep.</summary>
-        public int HistoryLength { get; set; } = 120;
-
         // --- Optional readouts on the system-info panel ---
         // Each one only ever hides a row that the hardware is actually reporting; a reading that
         // is unavailable stays hidden either way. Default on, so existing settings files keep the
@@ -331,6 +328,9 @@ namespace ZenTimings
 
         /// <summary>Show the CPU Die (Tctl/Tdie) temperature.</summary>
         public bool ShowCpuTemperature { get; set; } = true;
+
+        /// <summary>Show the I/O die hotspot temperature. Zen 5 power tables only.</summary>
+        public bool ShowIodTemperature { get; set; } = true;
 
         /// <summary>Show the average DIMM temperature.</summary>
         public bool ShowMemoryTemperature { get; set; } = true;

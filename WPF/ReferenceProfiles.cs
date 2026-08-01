@@ -169,6 +169,9 @@ namespace ZenTimings
         /// Transcribed from ZenTimings captures. Values are recorded exactly as the app displayed
         /// them, including the ones it greys out (an inactive tRFC2/tRFCsb is still what the
         /// controller holds), so a comparison is like-for-like.
+        ///
+        /// The tCCD_L family is the exception: the captures predate this fork reading it, so those
+        /// three carry the AGESA default rather than a transcription.
         /// </summary>
         public static readonly List<ReferenceProfile> All = new List<ReferenceProfile>
         {
@@ -188,7 +191,9 @@ namespace ZenTimings
                     T("tMOD", "45"), T("tMODPDA", "32"), T("tPHYWRD", "6"), T("tPHYWRL", "11"),
                     T("tRDPRE", "3")),
                 new ReferenceSection("Secondary timings",
-                    T("tRDRDSCL", "6"), T("tWRWRSCL", "1"), T("tCWL", "24"), T("tRTP", "10"),
+                    T("tRDRDSCL", "6"), T("tWRWRSCL", "1"),
+                    T("tCCD_L", "12"), T("tCCD_L_WR", "48"), T("tCCD_L_WR2", "24"),
+                    T("tCWL", "24"), T("tRTP", "10"),
                     T("tRDWR", "14"), T("tWRRD", "2"), T("tRDRDSC", "1"), T("tRDRDSD", "1"),
                     T("tRDRDDD", "1"), T("tWRWRSC", "1"), T("tWRWRSD", "1"), T("tWRWRDD", "1"),
                     T("tCKE", "0"), T("tREFI", "65535"), T("Refresh", "Mixed"), T("tSTAG", "7"),
@@ -226,7 +231,9 @@ namespace ZenTimings
                     T("tMOD", "42"), T("tMODPDA", "32"), T("tPHYWRD", "6"), T("tPHYWRL", "9"),
                     T("tRDPRE", "3")),
                 new ReferenceSection("Secondary timings",
-                    T("tRDRDSCL", "5"), T("tWRWRSCL", "1"), T("tCWL", "22"), T("tRTP", "10"),
+                    T("tRDRDSCL", "5"), T("tWRWRSCL", "1"),
+                    T("tCCD_L", "12"), T("tCCD_L_WR", "48"), T("tCCD_L_WR2", "24"),
+                    T("tCWL", "22"), T("tRTP", "10"),
                     T("tRDWR", "14"), T("tWRRD", "2"), T("tRDRDSC", "1"), T("tRDRDSD", "1"),
                     T("tRDRDDD", "1"), T("tWRWRSC", "1"), T("tWRWRSD", "1"), T("tWRWRDD", "1"),
                     T("tCKE", "0"), T("tREFI", "65535"), T("Refresh", "Mixed"), T("tSTAG", "7"),
@@ -265,7 +272,9 @@ namespace ZenTimings
                     T("tMOD", "47"), T("tMODPDA", "32"), T("tPHYWRD", "6"), T("tPHYWRL", "9"),
                     T("tRDPRE", "3")),
                 new ReferenceSection("Secondary timings",
-                    T("tRDRDSCL", "6"), T("tWRWRSCL", "1"), T("tCWL", "22"), T("tRTP", "8"),
+                    T("tRDRDSCL", "6"), T("tWRWRSCL", "1"),
+                    T("tCCD_L", "12"), T("tCCD_L_WR", "48"), T("tCCD_L_WR2", "24"),
+                    T("tCWL", "22"), T("tRTP", "8"),
                     T("tRDWR", "14"), T("tWRRD", "1"), T("tRDRDSC", "1"), T("tRDRDSD", "1"),
                     T("tRDRDDD", "1"), T("tWRWRSC", "1"), T("tWRWRSD", "1"), T("tWRWRDD", "1"),
                     T("tCKE", "0"), T("tREFI", "65535"), T("Refresh", "Normal"), T("tSTAG", "7"),
@@ -298,7 +307,9 @@ namespace ZenTimings
                     T("tMOD", "42"), T("tMODPDA", "32"), T("tPHYWRD", "6"), T("tPHYWRL", "9"),
                     T("tRDPRE", "3")),
                 new ReferenceSection("Secondary timings",
-                    T("tRDRDSCL", "5"), T("tWRWRSCL", "1"), T("tCWL", "22"), T("tRTP", "12"),
+                    T("tRDRDSCL", "5"), T("tWRWRSCL", "1"),
+                    T("tCCD_L", "12"), T("tCCD_L_WR", "48"), T("tCCD_L_WR2", "24"),
+                    T("tCWL", "22"), T("tRTP", "12"),
                     T("tRDWR", "12"), T("tWRRD", "1"), T("tRDRDSC", "1"), T("tRDRDSD", "1"),
                     T("tRDRDDD", "1"), T("tWRWRSC", "1"), T("tWRWRSD", "1"), T("tWRWRDD", "1"),
                     T("tCKE", "0"), T("tREFI", "65535"), T("Refresh", "Normal"), T("tSTAG", "7"),

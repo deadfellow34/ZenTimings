@@ -1,3 +1,29 @@
+# v1.43.0
+
+ - Reworked the memory benchmark: native buffer with automatic large pages, pinned to a quiet
+   core, short-slice sampling with a noise verdict; app polling pauses during a run. A new
+   Random score exposes the bank-cycle timings (tRAS, tRC, tRRD, tFAW)
+ - Benchmark history panel with a pinnable baseline and an HTML export that embeds the
+   ZenTimings window next to the scores
+ - Benchmark ceilings now scale with CCD and populated channel count
+ - New "All" button next to the module selector shows every channel's timings side by side,
+   each column headed with the module's PMIC, rank, DRAM die and capacity
+ - New IOD readout on Zen 5: I/O die temperature and its hotspot, with a switch in Options
+ - DIMM temperature and power now share one readout instead of two labelled entries
+ - The clock ratio now sits on UCLK alone, as 1:1 or 1:2 against MCLK. MCLK and FCLK no longer
+   carry one
+ - Exports now carry the full tCCD_L family (JSON, HTML, OC profiles)
+ - System Info now lists tCCD_L, tCCD_L_WR and tCCD_L_WR2 under Memory Timings and APOB Table
+ - tCCD_L values that fall back to the register readout are marked with "!"
+ - The HTML debug report is dark now; printing it still comes out white
+ - Turkish interface extended to the benchmark window
+ - Options window now scrolls when it is taller than the screen
+ - Benchmark runs recorded before this release are marked "not comparable" instead of being
+   given a baseline delta
+ - CPU VDDIO above ~1.45 V shows N/A — this is expected and cannot be fixed for now
+   (the firmware zeroes the only field that carries the value)
+ - Many bug fixes
+
 # v1.42.8
 
  - Fixed CPU VDDIO showing 0.0000V or a swapped value on some AGESA versions

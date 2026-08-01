@@ -139,9 +139,8 @@
                             Margin="0 -5 0 0"
                         />
 
-                        <!-- Live temperatures: CPU Die (Tctl/Tdie) and DDR5 memory (SPD hub).
-                             Each readout carries a sparkline of its own recent history and a
-                             min/max/avg tooltip. -->
+                        <!-- Live readouts: CPU die (Tctl/Tdie), IOD, DDR5 memory (SPD hub) and
+                             WHEA. Each carries a min/max/avg tooltip over the session. -->
                         <Border Padding="12 0 0 0"
                                 Visibility="{Binding IsAnyReadoutVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal">
@@ -159,28 +158,31 @@
                                            ToolTip="{Binding CpuTemperatureToolTip, Mode=OneWay}"
                                            Visibility="{Binding IsCpuTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
 
-                                <!-- Average across the populated DIMMs, so the row keeps the same
-                                     width whether one or four are fitted. Hovering lists each
-                                     module separately. -->
+                                <!-- I/O die: no register of its own, so it comes out of the
+                                     Zen 5 power table. -->
+                                <TextBlock Text="{loc:Loc Main.IodHotspot}"
+                                           Padding="0 0 3 5"
+                                           Visibility="{Binding IsIodTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding IodTemperatureText, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           MinWidth="96"
+                                           Padding="0 0 4 5"
+                                           ToolTip="{Binding IodTemperatureToolTip, Mode=OneWay}"
+                                           Visibility="{Binding IsIodTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+
+                                <!-- Temperature and power share one DIMM entry: they describe the
+                                     same modules, and two labelled pairs cost the row 60px it does
+                                     not have. Temperature is the average across the populated
+                                     modules; hovering lists each one. -->
                                 <TextBlock Text="{loc:Loc Main.Memory}"
                                            Padding="0 0 3 5"
-                                           Visibility="{Binding IsMemoryTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
-                                <TextBlock Text="{Binding MemoryTemperatureText, Mode=OneWay}"
+                                           Visibility="{Binding IsDimmReadoutVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding DimmReadoutText, Mode=OneWay}"
                                            FontWeight="SemiBold"
-                                           MinWidth="54"
+                                           MinWidth="{Binding DimmReadoutMinWidth, Mode=OneWay}"
                                            Padding="0 0 4 5"
-                                           ToolTip="{Binding MemoryTemperatureToolTip, Mode=OneWay}"
-                                           Visibility="{Binding IsMemoryTemperatureVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
-
-                                <TextBlock Text="{loc:Loc Main.DimmPower}"
-                                           Padding="0 0 3 5"
-                                           Visibility="{Binding IsMemoryPowerVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
-                                <TextBlock Text="{Binding MemoryPowerText, Mode=OneWay}"
-                                           FontWeight="SemiBold"
-                                           MinWidth="52"
-                                           Padding="0 0 4 5"
-                                           ToolTip="Sum of the on-module PMIC power readings"
-                                           Visibility="{Binding IsMemoryPowerVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
+                                           ToolTip="{Binding DimmReadoutToolTip, Mode=OneWay}"
+                                           Visibility="{Binding IsDimmReadoutVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}" />
 
                                 <!-- Machine-check errors since boot. Sits with the temperatures
                                      because it is watched for the same reason: it is the first
@@ -254,7 +256,17 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <ComboBox x:Name="comboBoxPartNumber" IsReadOnly="True" Grid.Column="0" />
+                    <DockPanel Grid.Column="0">
+                        <Button x:Name="buttonAllDimms"
+                                DockPanel.Dock="Right"
+                                Content="{loc:Loc AllDimms.Button}"
+                                Padding="7 0"
+                                Margin="4 0 0 0"
+                                Visibility="Collapsed"
+                                ToolTip="{loc:Loc AllDimms.Tip}"
+                                Click="ButtonAllDimms_Click" />
+                        <ComboBox x:Name="comboBoxPartNumber" IsReadOnly="True" />
+                    </DockPanel>
                     <StackPanel 
                         Grid.Column="2"
                         Orientation="Horizontal"
