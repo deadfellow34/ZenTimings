@@ -32,41 +32,35 @@
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Vertical" Margin="15,15,5,15" Grid.ColumnSpan="6" Grid.Row="0" Width="424">
-                <TextBlock Text="v1.41.5 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
+                <TextBlock Text="v1.44.0 &#8212; updated by deadfellow" FontSize="13" Style="{DynamicResource ValueStyles}" Height="auto" HorizontalAlignment="Left" Margin="0" />
                 <TextBlock Text="Hand-patched fork of ZenTimings by irusanov. Auto-update is switched off on purpose: an upstream release would overwrite these changes."
                            TextWrapping="WrapWithOverflow" Height="auto" Margin="0,4,0,0" Opacity="0.75" />
 
                 <TextBlock Text="" />
-                <TextBlock Text="New" FontWeight="Bold" Height="auto" />
-                <TextBlock Text=" - CPU Die temperature, memory temperature, DIMM power and the WHEA error count can each be switched on or off (Options &#8594; Readouts)" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text="Benchmark" FontWeight="Bold" Height="auto" />
+                <TextBlock Text=" - The memory benchmark now also measures your CPU caches: speed and latency for L1, L2, L3 and RAM, all in one table" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Results are much steadier between runs &#8212; the app automatically finds and uses the best core" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - On CPUs with two chiplets (7950X3D, 9950X3D...), each L3 cache gets its own row, and the row shows how many cores measured it (e.g. &quot;8 of 16&quot;)" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - A Re-run button and progress bar were added to the results tab, so you don't have to switch back to run again" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - A new 2048 MB buffer option for CPUs with very large caches" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - If the benchmark can't use large memory pages, it now tells you why &#8212; and a &quot;What to do?&quot; button walks you through the fix" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Benchmark history with a pinnable baseline: click any old run to see exactly what got faster or slower" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - One-click HTML export shares your full result, with a screenshot of your timings next to the scores" TextWrapping="WrapWithOverflow" Height="auto" />
+
+                <TextBlock Text="" />
+                <TextBlock Text="Readouts" FontWeight="Bold" Height="auto" />
+                <TextBlock Text=" - New I/O die temperature readout for Zen 5 and Ryzen 7000, with a switch in Options" TextWrapping="WrapWithOverflow" Height="auto" />
 
                 <TextBlock Text="" />
                 <TextBlock Text="Fixed" FontWeight="Bold" Height="auto" />
-                <TextBlock Text=" - Screenshot bug fixes" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - Your benchmark history can no longer be lost if the file gets corrupted &#8212; it is rescued instead of overwritten" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - If your RAM overclock is unstable, the benchmark reports a memory error instead of crashing &#8212; that's your answer, not a bug" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - SoC voltage no longer shows a false 1.55 V while HWiNFO or other monitoring tools are running" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - tCCD_L timings now read correctly(i hope) on the newest BIOSes (AGESA 1.3.0.1c)" TextWrapping="WrapWithOverflow" Height="auto" />
+                <TextBlock Text=" - If anything ever crashes, the app leaves a crash.txt next to the exe so the cause can be found" TextWrapping="WrapWithOverflow" Height="auto" />
 
                 <TextBlock Text="" />
-                <TextBlock Text="Monitoring" FontWeight="Bold" Height="auto" />
-                <TextBlock Text=" - Live CPU Die and DDR5 DIMM temperatures on the main window, each with a sparkline of its recent history and a min/max/avg tooltip" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - Total DIMM power, summed from the on-module PMICs" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - Tray icon can show the hottest temperature, in a colour of your choice (Options &#8594; Tray icon colour)" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - CSV telemetry logging" TextWrapping="WrapWithOverflow" Height="auto" />
-
-                <TextBlock Text="" />
-                <TextBlock Text="Timings" FontWeight="Bold" Height="auto" />
-                <TextBlock Text=" - tCCD_L and tCCD_L_WR2, decoded from UMC registers ZenStates-Core does not read" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - tCCD_L_WR, recovered from the APOB: it appears in no UMC register, in the AOD table or in the SPD" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - CA / CK / CS on-die termination per bank group (ODT A and ODT B)" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - Timings panel rebalanced so all three columns end on the same row" TextWrapping="WrapWithOverflow" Height="auto" />
-
-                <TextBlock Text="" />
-                <TextBlock Text="Convenience" FontWeight="Bold" Height="auto" />
-                <TextBlock Text=" - Turkish user interface (Options &#8594; Language)" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - Ctrl+Alt+S screenshot hotkey, named from the current memory configuration" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - Start with Windows" TextWrapping="WrapWithOverflow" Height="auto" />
-                <TextBlock Text=" - Tray glyph drawn at the shell's real icon size, so it stays sharp on scaled displays" TextWrapping="WrapWithOverflow" Height="auto" />
-
-                <TextBlock Text="" />
-                <TextBlock Text="Help &#8594; Changelog lists the upstream history." Height="auto" Opacity="0.75" TextWrapping="WrapWithOverflow" />
+                <TextBlock Text="Help &#8594; Changelog lists the full version history." Height="auto" Opacity="0.75" TextWrapping="WrapWithOverflow" />
             </StackPanel>
             <Border Padding="4 10" Grid.ColumnSpan="6" Grid.Row="2">
                 <Button x:Name="Changelog_Close" Content="OK" Width="80" IsCancel="True" />
