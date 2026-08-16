@@ -1290,6 +1290,7 @@ namespace ZenTimings
 
             uint? first = null, middle = null, third = null;
             int hits = 0;
+            bool anchored = false;
             int last = (ApobTripleOffset + 3) * width;
 
             for (var i = 0; i + last <= ext.Length; i += width)
@@ -1315,9 +1316,17 @@ namespace ZenTimings
                 middle = b;
                 third = c;
                 hits++;
+
+                // The same constant 8 the value scan anchors on sits one element before the run
+                // in every dump on file, whichever AGESA wrote it.
+                anchored |= ReadField(ext, run - width, width) == 8;
             }
 
-            if (hits == 0 || (hits < 2 && wr2Hint == 0))
+            // AGESA 1.3.0.1c writes one marker copy where 1.3.0.1b wrote one per channel, so a
+            // lone hit cannot mean "half the channels disagree" any more. Without the register
+            // vouching for tCCD_L_WR2 it is accepted only with the 8 in front of the run - the
+            // second witness the missing copy used to be.
+            if (hits == 0 || (hits < 2 && wr2Hint == 0 && !anchored))
                 return false;
 
             tccdl = first.Value;
@@ -1540,51 +1549,103 @@ namespace ZenTimings
                 {
                     Thread.CurrentThread.IsBackground = true;
 
-                    if (AsusWmi != null && AsusWmi.Status == 1)
+                    // The whole poll, because this thread has nobody above it: one bad read used
+                    // to take the process down, and a failed poll is only a skipped refresh.
+                    try
                     {
-                        AsusWmi.UpdateSensors();
-                        AsusSensorInfo sensor = AsusWmi.FindSensorByName("DRAM Voltage");
-                        if (sensor != null)
-                            Dispatcher.Invoke(DispatcherPriority.ApplicationIdle,
-                                new Action(() =>
-                                {
-                                    (timingsPanel as DDR4TimingsPanel).textBoxMemVddio.Text = sensor.Value;
-                                    (timingsPanel as DDR4TimingsPanel).labelMemVddio.IsEnabled = true;
-                                }));
-                    }
+                        // Stopping the timer cannot recall a poll already detached: this thread
+                        // started up to one refresh interval before the benchmark took the gate,
+                        // and every bus below it is one the measurement exists to keep quiet.
+                        if (BenchmarkSession.Running)
+                            return;
 
-                    //ReadDDR4MemoryConfig();
-                    cpu.RefreshPowerTable();
-                    var voltagesUpdated = false;
-                    if (cpu.memoryConfig?.SpdInfo?.Values != null)
-                    {
-                        voltagesUpdated = cpu.memoryConfig.RefreshTelemetry(settings.AutoRefreshInterval);
-                    }
-
-                    UpdateLiveReadouts();
-
-                    Dispatcher.Invoke(DispatcherPriority.ApplicationIdle, new Action(() =>
-                    {
-                        var newMclk = cpu.powerTable.MCLK;
-
-                        if (newMclk != lastMclk)
+                        if (AsusWmi != null && AsusWmi.Status == 1)
                         {
-                            var modules = cpu.memoryConfig.Modules;
-                            int selectedIndex = comboBoxPartNumber?.SelectedIndex ?? 0;
-                            MemoryModule module = modules?.Count > 0 ? modules[selectedIndex] : null;
-                            mainViewModel.Timings = ReadTimings(module?.DctOffset ?? 0);
-                            //Dictionary<byte, Ddr5SpdInfo> results = Ddr5SpdDecoder.ReadAndDecodeAll(CpuSingleton.Instance.SmbusPiix4);
+                            AsusWmi.UpdateSensors();
+                            AsusSensorInfo sensor = AsusWmi.FindSensorByName("DRAM Voltage");
+                            if (sensor != null)
+                                // Delegate first. The (priority, delegate) overload is the legacy
+                                // one: it hands a throw to the dispatcher's UnhandledException
+                                // instead of rethrowing here, so the catch below never sees it and
+                                // the process goes down anyway.
+                                Dispatcher.Invoke(new Action(() =>
+                                    {
+                                        // Only the DDR4 panel has the box; the sensor can exist
+                                        // on boards that do not.
+                                        var ddr4Panel = timingsPanel as DDR4TimingsPanel;
+                                        if (ddr4Panel == null)
+                                            return;
+
+                                        ddr4Panel.textBoxMemVddio.Text = sensor.Value;
+                                        ddr4Panel.labelMemVddio.IsEnabled = true;
+                                    }), DispatcherPriority.ApplicationIdle);
                         }
 
-                        if (voltagesUpdated)
-                            mainViewModel.PmicData = cpu.memoryConfig.SpdInfo.Values.ElementAtOrDefault(comboBoxPartNumber?.SelectedIndex ?? 0)?.PmicData ?? null;
+                        //ReadDDR4MemoryConfig();
+                        if (BenchmarkSession.Running)
+                            return;
 
-                        lastMclk = newMclk;
+                        cpu.RefreshPowerTable();
 
-                        ReadSVI();
-                        // SetFrequencyString();
-                        // RefreshSensors();
-                    }));
+                        if (BenchmarkSession.Running)
+                            return;
+
+                        var voltagesUpdated = false;
+                        if (cpu.memoryConfig?.SpdInfo?.Values != null)
+                        {
+                            voltagesUpdated = cpu.memoryConfig.RefreshTelemetry(settings.AutoRefreshInterval);
+                        }
+
+                        if (BenchmarkSession.Running)
+                            return;
+
+                        UpdateLiveReadouts();
+
+                        Dispatcher.Invoke(new Action(() =>
+                        {
+                            // Queued at idle priority, and the idle a run leaves on the UI thread
+                            // is exactly when it gets dispatched, so the gate is read here rather
+                            // than in front of the Invoke: ReadTimings and ReadSVI below are UMC
+                            // and SVI2 register reads like any other.
+                            if (BenchmarkSession.Running)
+                                return;
+
+                            // The ctor swallows a failed power table and the window carries on, so
+                            // this can be null on a CPU the table defs do not cover. Only the
+                            // frequency re-read needs it - the PMIC rails and SVI2 below do not.
+                            var power = cpu.powerTable;
+                            if (power != null)
+                            {
+                                var newMclk = power.MCLK;
+
+                                if (newMclk != lastMclk)
+                                {
+                                    var modules = cpu.memoryConfig.Modules;
+
+                                    // -1 while the combo has no selection.
+                                    int selectedIndex = Math.Max(0, comboBoxPartNumber?.SelectedIndex ?? 0);
+                                    MemoryModule module = modules != null && selectedIndex < modules.Count
+                                        ? modules[selectedIndex]
+                                        : null;
+                                    mainViewModel.Timings = ReadTimings(module?.DctOffset ?? 0);
+                                    //Dictionary<byte, Ddr5SpdInfo> results = Ddr5SpdDecoder.ReadAndDecodeAll(CpuSingleton.Instance.SmbusPiix4);
+                                }
+
+                                lastMclk = newMclk;
+                            }
+
+                            if (voltagesUpdated)
+                                mainViewModel.PmicData = cpu.memoryConfig.SpdInfo.Values.ElementAtOrDefault(Math.Max(0, comboBoxPartNumber?.SelectedIndex ?? 0))?.PmicData ?? null;
+
+                            ReadSVI();
+                            // SetFrequencyString();
+                            // RefreshSensors();
+                        }), DispatcherPriority.ApplicationIdle);
+                    }
+                    catch (Exception ex)
+                    {
+                        CrashLog.WriteOnce("refresh-tick", ex);
+                    }
                 }).Start();
             }
             catch (Exception ex)
@@ -1643,6 +1704,12 @@ namespace ZenTimings
 
         private static void MinimizeFootprint()
         {
+            // Emptying the working set drops the benchmark's buffers out of it, and the timed
+            // windows that follow pay the page faults the first touch exists to avoid. A restore,
+            // a resize or a click on this window must not land in a measurement.
+            if (BenchmarkSession.Running)
+                return;
+
             InteropMethods.EmptyWorkingSet(Process.GetCurrentProcess().Handle);
         }
 
@@ -2083,6 +2150,16 @@ namespace ZenTimings
 
         private void DebugToolstripItem_Click(object sender, RoutedEventArgs e)
         {
+            // The report walks every channel's registers and holds the PCI mutex while it does,
+            // so opening it mid-benchmark puts the app's own SMN traffic into the measurement and
+            // the run then reports the windows as contended by "another tool". Refused the same
+            // way the All DIMMs view refuses it.
+            if (BenchmarkSession.Running)
+            {
+                HandleError(Localization.Loc.T("AllDimms.Busy"));
+                return;
+            }
+
             if (settings.AdvancedMode)
             {
                 Window parent = Application.Current.MainWindow;
@@ -2171,7 +2248,13 @@ namespace ZenTimings
         public void ApplyTraySetting()
         {
             UpdateTrayVisibility();
-            lastTrayText = null;   // force a redraw on the next call regardless of the cached value
+
+            // Only when turning it ON. UpdateTrayIcon reads a non-null lastTrayText as "a glyph
+            // is installed", so clearing it on the way OFF made the restore path unreachable and
+            // left the last drawn value frozen on the icon.
+            if (settings.TrayLiveIcon)
+                lastTrayText = null;
+
             UpdateTrayIcon();
         }
 

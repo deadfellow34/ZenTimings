@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
@@ -16,6 +17,9 @@ namespace ZenTimings.Windows
     public partial class OptionsDialog : ThemedAdonisWindow
     {
         //private const string Caption = "Disabling auto-refresh might lead to inaccurate voltages and frequencies on first launch";
+        // The longest interval this box accepts from the keyboard. Not a limit on the setting - a
+        // settings.xml may hold a longer one on purpose, and every consumer of it runs at any value.
+        private const int MaxTypedRefreshInterval = 60000;
         internal readonly AppSettings appSettings = AppSettings.Instance;
         internal readonly SystemInfo _systemInfo = CpuSingleton.Instance.systemInfo;
         private readonly DispatcherTimer timerInstance;
@@ -110,7 +114,22 @@ namespace ZenTimings.Windows
         private void ButtonSettingsApply_Click(object sender, RoutedEventArgs e)
         {
             appSettings.AutoRefresh = (bool)checkBoxAutoRefresh.IsChecked;
-            appSettings.AutoRefreshInterval = Convert.ToInt32(numericUpDownRefreshInterval.Text);
+            // Free text, not a spinner despite the name. Empty threw and took the app down, so
+            // anything unparsable keeps the stored interval. The ceiling binds a value typed here
+            // and nothing else: an interval already stored is a decision about how often the SMU
+            // and the SMBus are touched, and an Apply that leaves the box untouched must not
+            // shorten it. The floor belongs to the setter, which is why the box is refilled from it.
+            int refreshInterval;
+            if (!int.TryParse(numericUpDownRefreshInterval.Text, NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out refreshInterval))
+                refreshInterval = appSettings.AutoRefreshInterval;
+            else if (refreshInterval != appSettings.AutoRefreshInterval
+                && refreshInterval > MaxTypedRefreshInterval)
+                refreshInterval = MaxTypedRefreshInterval;
+
+            appSettings.AutoRefreshInterval = refreshInterval;
+            numericUpDownRefreshInterval.Text =
+                appSettings.AutoRefreshInterval.ToString(CultureInfo.InvariantCulture);
             appSettings.AdvancedMode = (bool)checkBoxAdvancedMode.IsChecked;
             appSettings.CheckForUpdates = (bool)checkBoxCheckUpdate.IsChecked;
             appSettings.SaveWindowPosition = (bool)checkBoxSavePosition.IsChecked;
@@ -122,7 +141,6 @@ namespace ZenTimings.Windows
             appSettings.ScreenshotSaveLocation = textBoxScreenshotPath.Text.Trim();
             appSettings.ImpedanceTableSrc = (ImpedanceTableSource)comboBoxImpedanceSource.SelectedIndex;
 
-            var previousLanguage = appSettings.Language;
             appSettings.Language = (AppLanguage)Math.Max(0, comboBoxLanguage.SelectedIndex);
             appSettings.ScreenshotHotkey = (bool)checkBoxScreenshotHotkey.IsChecked;
             appSettings.TrayLiveIcon = (bool)checkBoxTrayLiveIcon.IsChecked;
@@ -189,11 +207,21 @@ namespace ZenTimings.Windows
             if (_AdvancedMode != appSettings.AdvancedMode ||
                 _ImpedanceTableSource != appSettings.ImpedanceTableSrc ||
                 _CornerRadius != appSettings.CornerRadius ||
-                previousLanguage != appSettings.Language)
+                // Against the language the running UI was built with, not against the value read
+                // one line before it was overwritten: a second Apply would otherwise withdraw a
+                // restart that is still pending.
+                Loc.Language != appSettings.Language)
             {
                 buttonSettingsRestart.Visibility = Visibility.Visible;
                 appSettings.Save();
                 OptionsPopupText.Text = Loc.T("Opt.RestartNeeded");
+            }
+            else
+            {
+                // The XAML text is a one-shot string, not a binding, so an Apply that no longer
+                // needs a restart has to put the banner back itself.
+                buttonSettingsRestart.Visibility = Visibility.Hidden;
+                OptionsPopupText.Text = Loc.T("Opt.SettingsSaved");
             }
 
             // The viewport, not the scrolled content: the content is narrower once a scrollbar

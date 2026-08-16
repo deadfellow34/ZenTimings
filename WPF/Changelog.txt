@@ -1,28 +1,29 @@
-# v1.43.0
+# v1.44.0
 
- - Reworked the memory benchmark: native buffer with automatic large pages, pinned to a quiet
-   core, short-slice sampling with a noise verdict; app polling pauses during a run. A new
-   Random score exposes the bank-cycle timings (tRAS, tRC, tRRD, tFAW)
- - Benchmark history panel with a pinnable baseline and an HTML export that embeds the
-   ZenTimings window next to the scores
- - Benchmark ceilings now scale with CCD and populated channel count
- - New "All" button next to the module selector shows every channel's timings side by side,
-   each column headed with the module's PMIC, rank, DRAM die and capacity
- - New IOD readout on Zen 5: I/O die temperature and its hotspot, with a switch in Options
- - DIMM temperature and power now share one readout instead of two labelled entries
- - The clock ratio now sits on UCLK alone, as 1:1 or 1:2 against MCLK. MCLK and FCLK no longer
-   carry one
- - Exports now carry the full tCCD_L family (JSON, HTML, OC profiles)
- - System Info now lists tCCD_L, tCCD_L_WR and tCCD_L_WR2 under Memory Timings and APOB Table
- - tCCD_L values that fall back to the register readout are marked with "!"
- - The HTML debug report is dark now; printing it still comes out white
- - Turkish interface extended to the benchmark window
- - Options window now scrolls when it is taller than the screen
- - Benchmark runs recorded before this release are marked "not comparable" instead of being
-   given a baseline delta
- - CPU VDDIO above ~1.45 V shows N/A — this is expected and cannot be fixed for now
-   (the firmware zeroes the only field that carries the value)
- - Many bug fixes
+ - The memory benchmark now also measures your CPU caches: speed and latency for L1, L2, L3
+   and RAM, all in one table
+ - Results are much steadier between runs - the app automatically finds and uses the best core
+ - On CPUs with two chiplets (7950X3D, 9950X3D...), each L3 cache gets its own row, and the
+   row shows how many cores measured it (e.g. "8 of 16")
+ - A Re-run button and progress bar were added to the results tab, so you don't have to switch
+   back to run again
+ - A new 2048 MB buffer option for CPUs with very large caches
+ - If the benchmark can't use large memory pages, it now tells you why - and a "What to do?"
+   button walks you through the fix
+ - Benchmark history with a pinnable baseline: click any old run to see exactly what got
+   faster or slower
+ - One-click HTML export shares your full result, with a screenshot of your timings next to
+   the scores
+ - Your benchmark history can no longer be lost if the file gets corrupted - it is rescued
+   instead of overwritten
+ - If your RAM overclock is unstable, the benchmark reports a memory error instead of
+   crashing - that's your answer, not a bug
+ - New I/O die temperature readout for Zen 5 and Ryzen 7000, with a switch in Options
+ - SoC voltage no longer shows a false 1.55 V while HWiNFO or other monitoring tools are
+   running
+ - tCCD_L timings now read correctly(i hope) on the newest BIOSes (AGESA 1.3.0.1c)
+ - If anything ever crashes, the app leaves a crash.txt next to the exe so the cause can
+   be found
 
 # v1.42.8
 

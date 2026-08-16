@@ -659,6 +659,15 @@ namespace ZenTimings.Windows
 
         private async void ButtonDebug_Click(object sender, RoutedEventArgs e)
         {
+            // This window is modeless and can be left open across a run, so the menu entry that
+            // opened it cannot be the only gate: the report holds the PCI mutex over every
+            // channel's registers, which is what benchmark mode exists to keep off the bus.
+            if (BenchmarkSession.Running)
+            {
+                textBoxDebugOutput.Text = Localization.Loc.T("AllDimms.Busy");
+                return;
+            }
+
             await Task.Run(Debug);
         }
 

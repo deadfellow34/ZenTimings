@@ -261,14 +261,21 @@ namespace ZenTimings
         }
 
         private int _autoRefreshInterval = 2000;
+        // A floor only, because XML deserialisation writes through this setter and a stored value
+        // is not typed input. Negative throws out of DispatcherTimer.Interval in the MainWindow
+        // constructor, whose only recovery is to exit and write the same value back; zero fires on
+        // every dispatcher idle and starts an SMU/SMBus thread per tick. Above the floor there is
+        // nothing to protect: every consumer takes any int, and a long interval is how a user keeps
+        // ZenTimings off the SMU and the SMBus.
         public int AutoRefreshInterval
         {
             get => _autoRefreshInterval;
             set
             {
-                if (_autoRefreshInterval != value)
+                int interval = Math.Max(value, 100);
+                if (_autoRefreshInterval != interval)
                 {
-                    _autoRefreshInterval = value;
+                    _autoRefreshInterval = interval;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoRefreshInterval)));
                 }
             }

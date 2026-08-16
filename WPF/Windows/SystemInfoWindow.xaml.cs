@@ -223,6 +223,11 @@ namespace ZenTimings.Windows
 
         private void AdonisWindow_Activated(object sender, EventArgs e)
         {
+            // The trim is process-wide, so activating this window empties the benchmark's buffers
+            // out of the working set exactly as the main window's would.
+            if (BenchmarkSession.Running)
+                return;
+
             InteropMethods.EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
         }
 

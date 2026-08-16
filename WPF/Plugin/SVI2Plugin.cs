@@ -8,7 +8,9 @@ namespace ZenTimings.Plugin
 {
     public class SVI2Plugin : IPlugin
     {
-        private int timeout = 20;
+        // Spent per call, not per plugin: as a field it stayed spent, and one run of contended
+        // polls left the sensors dead for the rest of the session.
+        private const int RetryLimit = 20;
         private const string VERSION = "1.1";
 
         public string Name => "SVI2 Sensors";
@@ -47,12 +49,18 @@ namespace ZenTimings.Plugin
             {
                 uint socPlaneValue;
                 uint vcorePlaneValue;
+                int attempts = RetryLimit;
                 do
                 {
-                    ReadSensorValues(out socPlaneValue, out vcorePlaneValue);
-                } while ((socPlaneValue & 0xFF00) != 0 && (vcorePlaneValue & 0xFF00) != 0 && --timeout > 0);
+                    // VID 0 is 1.55 V, so a plane value of 0 passes for a real sample here; only
+                    // the read itself can report that it never happened.
+                    if (!ReadSensorValues(out socPlaneValue, out vcorePlaneValue))
+                        return false;
+                } while (Busy(socPlaneValue, vcorePlaneValue) && --attempts > 0);
 
-                if (timeout > 0)
+                // Both planes or neither: the two are read a moment apart, so one still busy is
+                // the ordinary case, and the block below publishes both.
+                if (!Busy(socPlaneValue, vcorePlaneValue))
                 {
                     UpdateSensorValue(socPlaneValue, Sensors[0]);
                     UpdateSensorValue(vcorePlaneValue, Sensors[1]);
@@ -64,26 +72,37 @@ namespace ZenTimings.Plugin
             return false;
         }
 
-        private void ReadSensorValues(out uint socPlaneValue, out uint vcorePlaneValue)
+        /// <summary>A plane still carrying the SMU's busy bits is not a sample yet.</summary>
+        private static bool Busy(uint socPlaneValue, uint vcorePlaneValue)
+        {
+            return (socPlaneValue & 0xFF00) != 0 || (vcorePlaneValue & 0xFF00) != 0;
+        }
+
+        private bool ReadSensorValues(out uint socPlaneValue, out uint vcorePlaneValue)
         {
             socPlaneValue = 0;
             vcorePlaneValue = 0;
 
-            if (Mutexes.WaitPciBus(10))
-            {
-                socPlaneValue = cpuInstance.ReadDword(cpuInstance.info.svi2.socAddress);
-                vcorePlaneValue = cpuInstance.ReadDword(cpuInstance.info.svi2.coreAddress);
+            // A neighbour monitoring tool can hold Global\Access_PCI for longer than this, and a
+            // sample that was never taken must stay missing rather than reach the panel as VID 0.
+            if (!Mutexes.WaitPciBus(10))
+                return false;
 
-                Mutexes.ReleasePciBus();
-            }
+            // NoLock because the mutex above is already held, and the Ex overloads because the
+            // plain ones hand back a zero on a failed SMN read - the one value that turns into a
+            // plausible 1.55 V rail. Both are read either way, so the release below stays paired.
+            bool read = cpuInstance.ReadDwordExNoLock(cpuInstance.info.svi2.socAddress, ref socPlaneValue)
+                & cpuInstance.ReadDwordExNoLock(cpuInstance.info.svi2.coreAddress, ref vcorePlaneValue);
+
+            Mutexes.ReleasePciBus();
+
+            return read;
         }
 
         private void UpdateSensorValue(uint planeValue, Sensor sensor)
         {
             uint vid = (planeValue >> 16) & 0xFF;
             sensor.Value = Convert.ToSingle(Utils.VidToVoltage(vid));
-
-            Console.WriteLine($"{sensor.Name}: {sensor.Min} {sensor.Max}");
         }
 
         public void Open()

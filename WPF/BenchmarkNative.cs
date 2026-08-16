@@ -1,9 +1,25 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace ZenTimings
 {
+    /// <summary>Why the large-page attempt did not take. <see cref="None"/> when it did.</summary>
+    /// <remarks>
+    /// Worth separating: the right being ungranted is a one-off the user can fix, while no
+    /// contiguous block free is a reboot away and says nothing about the setup. Both used to show
+    /// as the same "4K pages".
+    /// </remarks>
+    public enum LargePageFailure
+    {
+        None = 0,
+        NoPrivilege,
+        Unsupported,
+        Fragmented,
+        Other,
+    }
+
     /// <summary>
     /// Native plumbing shared by the latency and bandwidth tests: buffer allocation with a
     /// large-page attempt, CPU topology, and priority raising.
@@ -59,6 +75,73 @@ namespace ZenTimings
         [DllImport("kernel32.dll")]
         private static extern bool CloseHandle(IntPtr handle);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetProcessAffinityMask(IntPtr process, out UIntPtr processMask,
+            out UIntPtr systemMask);
+
+        /// <summary>
+        /// Logical processors this process may run on. SetThreadAffinityMask silently refuses any
+        /// mask outside it, so a pin that ignores this measures whatever core the scheduler had
+        /// the thread on - Task Manager's affinity box and Process Lasso make that an everyday
+        /// configuration, not an exotic one. Zero when the query fails; treat that as unrestricted.
+        /// </summary>
+        internal static ulong ProcessAffinityMask()
+        {
+            try
+            {
+                UIntPtr process, system;
+                return GetProcessAffinityMask(GetCurrentProcess(), out process, out system)
+                    ? process.ToUInt64()
+                    : 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx status);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MemoryStatusEx
+        {
+            public uint Length;
+            public uint MemoryLoad;
+            public ulong TotalPhys;
+            public ulong AvailPhys;
+            public ulong TotalPageFile;
+            public ulong AvailPageFile;
+            public ulong TotalVirtual;
+            public ulong AvailVirtual;
+            public ulong AvailExtendedVirtual;
+        }
+
+        /// <summary>
+        /// What Windows should still have left over once the buffers are out. The pad also absorbs
+        /// the shuffled-cycle table, which is a sixteenth of the buffer and is not counted by
+        /// either caller, so at the fixed 1 GB size what really remains is nearer 448 MB.
+        /// </summary>
+        private const ulong FreeMemoryHeadroom = 512UL * 1024 * 1024;
+
+        /// <summary>
+        /// True when that many bytes fit in free RAM. A commit the pagefile can cover succeeds
+        /// with no physical memory behind it, so VirtualAlloc returning a pointer says nothing -
+        /// and a benchmark that pages measures the disk. Also true when Windows will not answer:
+        /// a failed query is not a reason to refuse the run.
+        /// </summary>
+        internal static bool FitsInFreeMemory(long bytes)
+        {
+            var status = new MemoryStatusEx();
+            status.Length = (uint)Marshal.SizeOf(typeof(MemoryStatusEx));
+
+            if (!GlobalMemoryStatusEx(ref status) || status.AvailPhys == 0)
+                return true;
+
+            return status.AvailPhys >= (ulong)bytes + FreeMemoryHeadroom;
+        }
+
         // Pack = 4 is load-bearing: LUID is only 4-byte aligned in C, so without it Luid lands at
         // offset 8 instead of 4 and AdjustTokenPrivileges reads garbage - returning TRUE with
         // ERROR_NOT_ALL_ASSIGNED even for privileges the token holds.
@@ -74,10 +157,14 @@ namespace ZenTimings
         private const uint TOKEN_QUERY = 0x08;
         private const uint SE_PRIVILEGE_ENABLED = 0x02;
         private const uint HIGH_PRIORITY_CLASS = 0x80;
+        private const uint REALTIME_PRIORITY_CLASS = 0x100;
         private const int THREAD_PRIORITY_TIME_CRITICAL = 15;
         private const int THREAD_PRIORITY_HIGHEST = 2;
         private const int RelationProcessorCore = 0;
         private const int RelationCache = 2;
+        private const int ERROR_NOT_ENOUGH_MEMORY = 8;
+        private const int ERROR_PRIVILEGE_NOT_HELD = 1314;
+        private const int ERROR_NO_SYSTEM_RESOURCES = 1450;
 
         private static bool largePagePrivilegeTried;
         private static bool largePagePrivilegeHeld;
@@ -134,14 +221,48 @@ namespace ZenTimings
             public long Bytes { get; private set; }
             public bool LargePages { get; private set; }
 
+            /// <summary>Set when the buffer fell back to 4K, so the result line can say why.</summary>
+            public LargePageFailure Failure { get; private set; }
+
+            /// <summary>What the large-page VirtualAlloc failed with; 0 when it was never reached.</summary>
+            public int FailureCode { get; private set; }
+
+            private static LargePageFailure Classify(int error)
+            {
+                switch (error)
+                {
+                    // Granted but not enabled cannot happen here - the privilege is turned on
+                    // first - so this is the account having lost the right since.
+                    case ERROR_PRIVILEGE_NOT_HELD:
+                        return LargePageFailure.NoPrivilege;
+
+                    // No 2 MB physical block free. Nothing to do about it beyond a reboot; large
+                    // pages cannot be assembled out of scattered frames.
+                    case ERROR_NO_SYSTEM_RESOURCES:
+                    case ERROR_NOT_ENOUGH_MEMORY:
+                        return LargePageFailure.Fragmented;
+
+                    default:
+                        return LargePageFailure.Other;
+                }
+            }
+
             public static NativeBuffer Allocate(long bytes)
             {
                 var buffer = new NativeBuffer();
 
-                if (TryEnableLargePagePrivilege())
+                if (!TryEnableLargePagePrivilege())
+                {
+                    buffer.Failure = LargePageFailure.NoPrivilege;
+                }
+                else
                 {
                     ulong page = GetLargePageMinimum().ToUInt64();
-                    if (page > 0)
+                    if (page == 0)
+                    {
+                        buffer.Failure = LargePageFailure.Unsupported;
+                    }
+                    else
                     {
                         ulong rounded = ((ulong)bytes + page - 1) / page * page;
                         buffer.Pointer = VirtualAlloc(IntPtr.Zero, (UIntPtr)rounded,
@@ -152,6 +273,10 @@ namespace ZenTimings
                             buffer.LargePages = true;
                             return buffer;
                         }
+
+                        // Read straight away - the next managed call is free to overwrite it.
+                        buffer.FailureCode = Marshal.GetLastWin32Error();
+                        buffer.Failure = Classify(buffer.FailureCode);
                     }
                 }
 
@@ -219,11 +344,59 @@ namespace ZenTimings
         }
 
         /// <summary>
-        /// L3 size in bytes. With a non-zero <paramref name="affinityMask"/> it is the L3 serving
-        /// those processors - on a part with unequal dies (a 7950X3D has 96 MB on one CCD and 32
-        /// on the other) the cache that matters is the one belonging to the pinned core, not the
-        /// biggest in the package. Zero when the query fails.
+        /// Bytes in the level-N data cache serving <paramref name="affinityMask"/>, or the largest
+        /// of that level in the package when the mask is zero. Instruction caches are skipped -
+        /// only the path a load takes matters here. On a part with unequal dies (a 7950X3D has
+        /// 96 MB of L3 on one CCD and 32 on the other) the cache that matters is the one belonging
+        /// to the pinned core, not the biggest in the package. Zero when the level is not reported.
         /// </summary>
+        internal static long GetCacheBytes(int level, ulong affinityMask = 0)
+        {
+            try
+            {
+                var data = QueryProcessorInfo(RelationCache);
+                if (data == null)
+                    return 0;
+
+                long best = 0;
+                long matched = 0;
+                int offset = 0;
+                while (offset + 8 <= data.Length)
+                {
+                    int size = BitConverter.ToInt32(data, offset + 4);
+                    if (size <= 0 || offset + size > data.Length)
+                        break;
+
+                    // CACHE_RELATIONSHIP: Level +8, LineSize +10, CacheSize +12, Type +16,
+                    // GROUP_AFFINITY +40. Type 1 is the instruction cache.
+                    if (data[offset + 8] == level && BitConverter.ToUInt32(data, offset + 16) != 1)
+                    {
+                        long cache = BitConverter.ToUInt32(data, offset + 12);
+                        if (cache > best)
+                            best = cache;
+
+                        if (affinityMask != 0 && offset + 40 + IntPtr.Size + 2 <= data.Length)
+                        {
+                            ulong mask = IntPtr.Size == 8
+                                ? BitConverter.ToUInt64(data, offset + 40)
+                                : BitConverter.ToUInt32(data, offset + 40);
+                            ushort group = BitConverter.ToUInt16(data, offset + 40 + IntPtr.Size);
+                            if (group == 0 && (mask & affinityMask) != 0 && cache > matched)
+                                matched = cache;
+                        }
+                    }
+
+                    offset += size;
+                }
+
+                return matched > 0 ? matched : best;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         internal static long GetL3Bytes(ulong affinityMask = 0)
         {
             try
@@ -271,10 +444,37 @@ namespace ZenTimings
             }
         }
 
-        /// <summary>L3 of the core the latency walk pins itself to.</summary>
-        internal static long GetPinnedL3Bytes()
+        /// <summary>
+        /// Physical cores in the package, across every processor group. <see cref="GetCoreMasks"/>
+        /// stops at group 0 because SetThreadAffinityMask is group-relative; this is how a caller
+        /// tells that it is looking at part of the machine. Zero when the query fails.
+        /// </summary>
+        internal static int PhysicalCoreCount()
         {
-            return GetL3Bytes(LastCoreFirstLpMask());
+            try
+            {
+                var data = QueryProcessorInfo(RelationProcessorCore);
+                if (data == null)
+                    return 0;
+
+                int count = 0;
+                int offset = 0;
+                while (offset + 8 <= data.Length)
+                {
+                    int size = BitConverter.ToInt32(data, offset + 4);
+                    if (size <= 0 || offset + size > data.Length)
+                        break;
+
+                    count++;
+                    offset += size;
+                }
+
+                return count;
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         /// <summary>
@@ -322,6 +522,50 @@ namespace ZenTimings
         }
 
         /// <summary>
+        /// One affinity mask per L3, which is one per CCX rather than one per CCD: Zen 1 and 2 put
+        /// two on a die, and so do Strix Point and Krackan. It is still the split the sweep wants -
+        /// workers drawn from one cache measure something different from a set spread over both,
+        /// whether or not a fabric hop separates them. Null when the query fails.
+        /// </summary>
+        internal static ulong[] GetL3Groups()
+        {
+            try
+            {
+                var data = QueryProcessorInfo(RelationCache);
+                if (data == null)
+                    return null;
+
+                var masks = new List<ulong>();
+                int offset = 0;
+                while (offset + 8 <= data.Length)
+                {
+                    int size = BitConverter.ToInt32(data, offset + 4);
+                    if (size <= 0 || offset + size > data.Length)
+                        break;
+
+                    if (data[offset + 8] == 3 && offset + 40 + IntPtr.Size + 2 <= data.Length)
+                    {
+                        ulong mask = IntPtr.Size == 8
+                            ? BitConverter.ToUInt64(data, offset + 40)
+                            : BitConverter.ToUInt32(data, offset + 40);
+                        ushort group = BitConverter.ToUInt16(data, offset + 40 + IntPtr.Size);
+
+                        if (group == 0 && mask != 0 && !masks.Contains(mask))
+                            masks.Add(mask);
+                    }
+
+                    offset += size;
+                }
+
+                return masks.Count > 0 ? masks.ToArray() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// First logical processor of the last physical core. CPU 0 is where Windows concentrates
         /// the clock interrupt and most DPCs, so it is the one core a latency kernel must avoid.
         /// </summary>
@@ -338,24 +582,142 @@ namespace ZenTimings
             return last > 0 ? 1UL << last : 1UL;
         }
 
-        /// <summary>Raises the process to HIGH_PRIORITY_CLASS for the scope, then restores.</summary>
+        /// <summary>
+        /// Raises the process for the scope, then restores. Realtime where the account can hold
+        /// it, high otherwise.
+        /// </summary>
+        /// <remarks>
+        /// Realtime is what keeps a driver's DPC out of a timed slice, and it is what the tools
+        /// this one is compared against use. It is also the class that can make a machine
+        /// unusable, so it never outlives the scope: a watchdog parked on an event puts the class
+        /// back on its own if Dispose never runs. The watchdog sits above the measurement threads
+        /// on purpose - at realtime with a worker pinned to every core, a lower one would not be
+        /// scheduled to do it.
+        /// </remarks>
         internal sealed class PriorityScope : IDisposable
         {
+            /// <summary>Longer than any measurement, short enough that a hang is still a blip.</summary>
+            private const int WatchdogMs = 180000;
+
             private readonly uint previous;
             private readonly bool raised;
+            private readonly bool qosCleared;
+            private readonly ManualResetEvent done;
+
+            public bool Realtime { get; private set; }
 
             public PriorityScope()
             {
+                // Priority does not clear EcoQoS: a process launched in efficiency mode keeps its
+                // frequency cap even at REALTIME, and a cap moves the floor of every slice. The
+                // opt-out is its own call, absent before Win10 1709 - a miss changes nothing.
+                qosCleared = TrySetExecutionSpeedThrottling(false);
+
                 previous = GetPriorityClass(GetCurrentProcess());
-                if (previous != 0 && previous != HIGH_PRIORITY_CLASS)
-                    raised = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+                if (previous == 0)
+                    return;
+
+                if (previous != REALTIME_PRIORITY_CLASS)
+                {
+                    raised = SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
+                    Realtime = raised;
+
+                    // Denied without SeIncreaseBasePriority - still worth taking high.
+                    if (!raised && previous != HIGH_PRIORITY_CLASS)
+                        raised = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+                }
+
+                if (!raised)
+                    return;
+
+                // A throw past this point means no instance, so no Dispose and - worse - no
+                // watchdog either. The class would stay REALTIME for the session, and the next
+                // scope reads that back as the class to restore, so nothing ever puts it right.
+                try
+                {
+                    done = new ManualResetEvent(false);
+                    var watchdog = new Thread(Watch)
+                    {
+                        IsBackground = true,
+                        Priority = ThreadPriority.Highest,
+                        Name = "benchmark-priority-watchdog",
+                    };
+                    watchdog.Start();
+                }
+                catch
+                {
+                    SetPriorityClass(GetCurrentProcess(), previous);
+                    raised = false;
+                    Realtime = false;
+                    throw;
+                }
+            }
+
+            private void Watch()
+            {
+                // Blocking, not spinning: a watchdog that burns a core is the thing it exists to
+                // prevent.
+                if (!done.WaitOne(WatchdogMs))
+                    SetPriorityClass(GetCurrentProcess(), previous);
             }
 
             public void Dispose()
             {
                 if (raised)
                     SetPriorityClass(GetCurrentProcess(), previous);
+
+                if (qosCleared)
+                    TrySetExecutionSpeedThrottling(true);
+
+                if (done != null)
+                {
+                    done.Set();
+
+                    // Left to the finalizer on purpose: closing the handle here would race the
+                    // watchdog still inside WaitOne.
+                }
             }
+
+            /// <summary>
+            /// Off forces full execution speed; on hands the decision back to the system - the
+            /// state before the scope, whatever the launcher had set, since there is no read API
+            /// worth trusting across OS versions.
+            /// </summary>
+            private static bool TrySetExecutionSpeedThrottling(bool systemManaged)
+            {
+                try
+                {
+                    var state = new PROCESS_POWER_THROTTLING_STATE
+                    {
+                        Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+                        ControlMask = systemManaged ? 0 : PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+                        StateMask = 0,
+                    };
+
+                    return SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling,
+                        ref state, Marshal.SizeOf(typeof(PROCESS_POWER_THROTTLING_STATE)));
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            private const uint PROCESS_POWER_THROTTLING_CURRENT_VERSION = 1;
+            private const uint PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1;
+            private const int ProcessPowerThrottling = 4;
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct PROCESS_POWER_THROTTLING_STATE
+            {
+                public uint Version;
+                public uint ControlMask;
+                public uint StateMask;
+            }
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool SetProcessInformation(IntPtr hProcess,
+                int informationClass, ref PROCESS_POWER_THROTTLING_STATE information, int size);
         }
 
         /// <summary>

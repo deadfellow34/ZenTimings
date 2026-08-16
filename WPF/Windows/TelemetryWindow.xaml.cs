@@ -43,7 +43,13 @@ namespace ZenTimings.Windows
 
         private void UptimeTimer_Tick(object sender, EventArgs e)
         {
-            StatusText.Text = "Running: " + (DateTime.Now - _windowOpenedAt).ToString(@"hh\:mm\:ss");
+            // hh is the hours inside a day and drops the days entirely, on the one watch this
+            // window exists for: an overnight stability run reads 01:12:30 at its twenty-fifth
+            // hour, beside the min/max the same window has been accumulating all along.
+            TimeSpan elapsed = DateTime.Now - _windowOpenedAt;
+            StatusText.Text = "Running: " + (elapsed.Days > 0
+                ? elapsed.ToString(@"d\.hh\:mm\:ss")
+                : elapsed.ToString(@"hh\:mm\:ss"));
         }
 
         private void AppSettings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)

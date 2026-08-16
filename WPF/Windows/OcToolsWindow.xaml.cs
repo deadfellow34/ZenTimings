@@ -64,7 +64,7 @@ namespace ZenTimings.Windows
                 // A capture is thousands of SMN reads under the PCI bus mutex; tearing the window
                 // down underneath it would leave the mutex held.
                 e.Cancel = true;
-                StatusText.Text = "Capture in progress - the window will close once it finishes.";
+                StatusText.Text = "Capture in progress - close again once it finishes.";
             }
         }
 
@@ -85,14 +85,24 @@ namespace ZenTimings.Windows
 
         private async void ButtonCaptureA_Click(object sender, RoutedEventArgs e)
         {
-            _snapshotA = await CaptureAsync("A");
+            // Null is a capture that did not happen - no CPU, or a benchmark holding the bus - and
+            // a slot that already holds a snapshot must survive it.
+            var captured = await CaptureAsync("A");
+            if (captured == null)
+                return;
+
+            _snapshotA = captured;
             UpdateSnapshotLabels();
             RunRegisterCompare();
         }
 
         private async void ButtonCaptureB_Click(object sender, RoutedEventArgs e)
         {
-            _snapshotB = await CaptureAsync("B");
+            var captured = await CaptureAsync("B");
+            if (captured == null)
+                return;
+
+            _snapshotB = captured;
             UpdateSnapshotLabels();
             RunRegisterCompare();
         }
@@ -103,6 +113,15 @@ namespace ZenTimings.Windows
             {
                 MessageBox.Show("CPU access is not available.", "OC Tools",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+                return null;
+            }
+
+            // The sweep is SMN reads over every enabled channel, which is what the finally below
+            // already refuses to restart the refresh timer into. Both windows are modeless and
+            // expected to be open together, so the capture has to refuse to start as well.
+            if (BenchmarkSession.Running)
+            {
+                StatusText.Text = Localization.Loc.T("AllDimms.Busy");
                 return null;
             }
 

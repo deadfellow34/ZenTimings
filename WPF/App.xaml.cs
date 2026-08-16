@@ -18,6 +18,16 @@ namespace ZenTimings
         internal bool createdNew;
         public Updater updater;
 
+        public App()
+        {
+            // Not OnStartup: the generated Main parses App.xaml - theme dictionaries and all -
+            // before Run ever reaches it, and a failure there is exactly the crash on someone
+            // else's machine that is undebuggable without a file.
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+                CrashLog.Write("unhandled", args.ExceptionObject as Exception);
+            DispatcherUnhandledException += (s, args) => CrashLog.Write("dispatcher", args.Exception);
+        }
+
         protected override void OnStartup(StartupEventArgs e)
         {
             instanceMutex = new Mutex(true, mutexName, out createdNew);

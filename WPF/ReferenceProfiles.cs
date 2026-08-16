@@ -116,6 +116,8 @@ namespace ZenTimings
                 score.Add(T("Write", run.WriteGBs.ToString("F1", CultureInfo.InvariantCulture) + " GB/s"));
             if (run.CopyGBs > 0)
                 score.Add(T("Copy", run.CopyGBs.ToString("F1", CultureInfo.InvariantCulture) + " GB/s"));
+            if (run.RandomGBs > 0)
+                score.Add(T("Random", run.RandomGBs.ToString("F1", CultureInfo.InvariantCulture) + " GB/s"));
 
             var sections = new List<ReferenceSection>();
             if (score.Count > 0)

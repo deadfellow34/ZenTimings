@@ -24,19 +24,37 @@ namespace ZenTimings.Windows
             // make the comparison meaningless.
             _live = LiveSnapshot.Build(viewModel);
 
+            LoadProfiles();
+
+            if (ProfileSelector.Items.Count > 0)
+                ProfileSelector.SelectedIndex = 0;
+        }
+
+        /// <summary>
+        /// Rebuilt on every open: the window is cached, so a run benchmarked while it stayed open
+        /// would otherwise never appear in the only list that offers saved runs.
+        /// </summary>
+        private void LoadProfiles()
+        {
+            // By name, not by reference - FromRun mints a new instance on every load.
+            var selected = ProfileSelector.SelectedItem as ReferenceProfile;
+            string name = selected != null ? selected.Name : null;
+
             var profiles = ReferenceProfiles.AllIncludingSavedRuns();
             ProfileSelector.ItemsSource = profiles;
 
-            if (profiles.Count > 0)
-                ProfileSelector.SelectedIndex = 0;
+            if (name != null)
+                ProfileSelector.SelectedItem = profiles.Find(p => p.Name == name);
         }
 
         /// <summary>Brings a profile to the front, for the menu entries that name one.</summary>
         public void Select(ReferenceProfile profile)
         {
             // Re-read: the window is reused, so an open one would otherwise keep comparing against
-            // whatever the machine was doing when it was first opened.
+            // whatever the machine was doing when it was first opened. The list is rebuilt for the
+            // same reason - benchmarks saved since then are not in it.
             _live = LiveSnapshot.Build(_viewModel);
+            LoadProfiles();
 
             if (profile != null && !ReferenceEquals(ProfileSelector.SelectedItem, profile))
             {
